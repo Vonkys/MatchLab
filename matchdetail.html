@@ -146,6 +146,145 @@ function calculateScore(match){
 
     match.status = "played";
 }
+
+function rebuildPlayerStats(data){
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.teams?.forEach(team=>{
+                team.players?.forEach(player=>{
+
+                    // reset totals
+                    player.stats.total = {
+                        matches:0,
+                        minutes:0,
+                        goals:0,
+                        ownGoals:0,
+                        assists:0
+                    };
+
+                    player.stats.seasons = {};
+                });
+            });
+        });
+    });
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(match=>{
+
+                        if(match.status !== "played") return;
+                        if(!match.playerStats) return;
+
+                        const seasonId = season.id;
+
+                        league.teams.forEach(team=>{
+                            team.players.forEach(player=>{
+
+                                const stats = match.playerStats[player.id];
+                                if(!stats) return;
+
+                                // season init
+                                if(!player.stats.seasons[seasonId]){
+                                    player.stats.seasons[seasonId] = {
+                                        matches:0,
+                                        minutes:0,
+                                        goals:0,
+                                        ownGoals:0,
+                                        assists:0
+                                    };
+                                }
+
+                                // TOTAL
+                                player.stats.total.matches += 1;
+                                player.stats.total.minutes += stats.minutes || 0;
+                                player.stats.total.goals += stats.goals || 0;
+                                player.stats.total.ownGoals += stats.ownGoals || 0;
+                                player.stats.total.assists += stats.assists || 0;
+
+                                // SEASON
+                                player.stats.seasons[seasonId].matches += 1;
+                                player.stats.seasons[seasonId].minutes += stats.minutes || 0;
+                                player.stats.seasons[seasonId].goals += stats.goals || 0;
+                                player.stats.seasons[seasonId].ownGoals += stats.ownGoals || 0;
+                                player.stats.seasons[seasonId].assists += stats.assists || 0;
+
+                            });
+                        });
+
+                    });
+                });
+            });
+        });
+    });
+}
+
+
+
+function rebuildTeamStats(data){
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+
+            league.teams?.forEach(team=>{
+                team.stats = {
+                    played:0,
+                    wins:0,
+                    draws:0,
+                    losses:0,
+                    goalsFor:0,
+                    goalsAgainst:0,
+                    points:0
+                };
+            });
+
+            league.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(match=>{
+
+                        if(match.status !== "played") return;
+
+                        const homeTeam = league.teams.find(t=>t.id===match.homeTeam);
+                        const awayTeam = league.teams.find(t=>t.id===match.awayTeam);
+
+                        if(!homeTeam || !awayTeam) return;
+
+                        homeTeam.stats.played++;
+                        awayTeam.stats.played++;
+
+                        homeTeam.stats.goalsFor += match.homeScore || 0;
+                        homeTeam.stats.goalsAgainst += match.awayScore || 0;
+
+                        awayTeam.stats.goalsFor += match.awayScore || 0;
+                        awayTeam.stats.goalsAgainst += match.homeScore || 0;
+
+                        if(match.homeScore > match.awayScore){
+                            homeTeam.stats.wins++;
+                            homeTeam.stats.points += 3;
+                            awayTeam.stats.losses++;
+                        }
+                        else if(match.homeScore < match.awayScore){
+                            awayTeam.stats.wins++;
+                            awayTeam.stats.points += 3;
+                            homeTeam.stats.losses++;
+                        }
+                        else{
+                            homeTeam.stats.draws++;
+                            awayTeam.stats.draws++;
+                            homeTeam.stats.points += 1;
+                            awayTeam.stats.points += 1;
+                        }
+
+                    });
+                });
+            });
+
+        });
+    });
+}
+
 async function render(){
 
     const data=await getData();
@@ -231,8 +370,11 @@ async function render(){
 
     calculateScore(match);
 
-    await saveData(data);
-    window.location.href="zapasy.html";
+rebuildPlayerStats(data);
+rebuildTeamStats(data);
+
+await saveData(data);
+window.location.href="zapasy.html";
 };
 }
 
