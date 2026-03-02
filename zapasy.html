@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MatchLab – Zápasy</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+}
+
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+    font-weight:bold;
+    letter-spacing:3px;
+}
+
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+}
+
+select,button{
+    width:100%;
+    padding:14px;
+    margin-top:10px;
+    border:none;
+    border-radius:10px;
+    background:#1b1b1b;
+    color:white;
+}
+
+button{
+    background:#2b2b2b;
+    cursor:pointer;
+}
+
+.card{
+    background:#1b1b1b;
+    padding:14px;
+    border-radius:10px;
+    margin-top:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<span onclick="goIndex()" style="cursor:pointer">🏠 MATCHLAB</span>
+</div>
+
+<div id="app" class="container"></div>
+<div id="matchModal" style="
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,0.7);
+display:none;
+justify-content:center;
+align-items:center;
+z-index:1000;
+">
+
+  <div style="
+    background:#1b1b1b;
+    padding:20px;
+    border-radius:12px;
+    width:90%;
+    max-width:400px;
+  ">
+
+    <h3>Nový zápas</h3>
+
+    <select id="sportSelect"></select>
+    <select id="leagueSelect"></select>
+
+    <select id="seasonSelect"></select>
+<input id="newSeason" placeholder="Nová sezóna" style="display:none">
+
+<select id="roundSelect"></select>
+<input id="newRoundNumber" type="number" placeholder="Číslo kola" style="display:none">
+<input id="newRoundName" placeholder="Název kola" style="display:none">
+    <input id="date" type="date">
+
+    <select id="homeTeam"></select>
+    <select id="awayTeam"></select>
+
+    <button onclick="createMatch()">Uložit</button>
+    <button onclick="closeModal()">Zrušit</button>
+
+  </div>
+</div>
+<script type="module">
+
+/* ================= FIREBASE ================= */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* ================= STORAGE ================= */
+
+async function getData(){
+    const ref = doc(db,"appData","main");
+    const snap = await getDoc(ref);
+
+    if(snap.exists()) return snap.data();
+
+    const empty={sports:[]};
+    await setDoc(ref,empty);
+    return empty;
+}
+
+async function saveData(data){
+    localStorage.setItem("matchlab",JSON.stringify(data));
+    const ref = doc(db,"appData","main");
+    await setDoc(ref,data);
+}
+
+function generateId(){
+    return "id_"+Date.now()+Math.random();
+}
+
+window.goIndex=()=>window.location.href="./index.html";
+
+/* ================= RENDER ================= */
+
+async function render(){
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <h2>Zápasy</h2>
+        <button onclick="openModal()">➕ Přidat zápas</button>
+        <h3>Zápasy</h3>
+        <div id="matchList"></div>
+    `;
+
+    await fillSports();
+    await renderMatches();
+}
+
+/* ================= MODAL ================= */
+
+window.openModal=async function(){
+    document.getElementById("matchModal").style.display="flex";
+    await fillSports();
+    await fillLeagues();
+};
+
+window.closeModal=function(){
+    document.getElementById("matchModal").style.display="none";
+}
+
+/* ================= SELECTS ================= */
+
+async function fillSports(){
+
+    const data=await getData();
+    const select=document.getElementById("sportSelect");
+
+    select.innerHTML=`<option disabled selected hidden>Vyber sport</option>`;
+
+    data.sports.forEach(s=>{
+        select.innerHTML+=`<option value="${s.id}">${s.name}</option>`;
+    });
+
+    select.onchange=fillLeagues;
+}
+
+async function fillLeagues(){
+
+    const data=await getData();
+    const sportId=document.getElementById("sportSelect").value;
+    const leagueSelect=document.getElementById("leagueSelect");
+
+    leagueSelect.innerHTML=`<option disabled selected hidden>Vyber ligu</option>`;
+
+    const sport=data.sports.find(s=>s.id===sportId);
+    if(!sport) return;
+
+    sport.leagues.forEach(l=>{
+        leagueSelect.innerHTML+=`<option value="${l.id}">${l.name}</option>`;
+    });
+
+    leagueSelect.onchange = async ()=>{
+    await fillTeams();
+    await fillSeasons();
+};
+}
+
+async function fillSeasons(){
+
+    const data = await getData();
+    const sportId = sportSelect.value;
+    const leagueId = leagueSelect.value;
+
+    const seasonSelect = document.getElementById("seasonSelect");
+    seasonSelect.innerHTML =
+        `<option disabled selected hidden>Vyber sezónu</option>`;
+
+    const sport = data.sports.find(s=>s.id===sportId);
+    const league = sport.leagues.find(l=>l.id===leagueId);
+
+    (league.seasons || []).forEach(s=>{
+        seasonSelect.innerHTML +=
+            `<option value="${s.id}">${s.name}</option>`;
+    });
+
+    seasonSelect.innerHTML +=
+        `<option value="new">➕ Nová sezóna</option>`;
+
+    seasonSelect.onchange=()=>{
+        const isNew = seasonSelect.value==="new";
+        document.getElementById("newSeason").style.display =
+            isNew ? "block":"none";
+
+        fillRounds();
+    };
+}
+async function fillRounds(){
+
+    const data = await getData();
+
+    const sportId = document.getElementById("sportSelect").value;
+    const leagueId = document.getElementById("leagueSelect").value;
+    const seasonId = document.getElementById("seasonSelect").value;
+
+    const roundSelect = document.getElementById("roundSelect");
+    const dateInput = document.getElementById("date");
+
+    roundSelect.innerHTML =
+        `<option disabled selected hidden>Vyber kolo</option>`;
+
+    const sport = data.sports.find(s=>s.id===sportId);
+    const league = sport?.leagues.find(l=>l.id===leagueId);
+    const season = league?.seasons?.find(s=>s.id===seasonId);
+
+    season?.rounds?.forEach(r=>{
+        roundSelect.innerHTML +=
+            `<option value="${r.id}">${r.number}. kolo</option>`;
+    });
+
+    roundSelect.innerHTML +=
+        `<option value="new">➕ Nové kolo</option>`;
+
+    roundSelect.onchange = async ()=>{
+
+        const isNew = roundSelect.value === "new";
+
+        document.getElementById("newRoundNumber").style.display =
+            isNew ? "block":"none";
+
+        document.getElementById("newRoundName").style.display =
+            isNew ? "block":"none";
+
+        if(isNew){
+            dateInput.value = "";
+            return;
+        }
+
+        const selectedRound =
+            season.rounds.find(r=>r.id===roundSelect.value);
+
+        if(selectedRound?.date){
+    dateInput.value = selectedRound.date;
+}else if(selectedRound?.matches?.length){
+    // vezmeme datum prvního zápasu kola
+    dateInput.value = selectedRound.matches[0].date || "";
+}else{
+    dateInput.value = "";
+}
+    };
+}
+
+async function fillTeams(){
+
+    const data=await getData();
+
+    const sportId=document.getElementById("sportSelect").value;
+    const leagueId=document.getElementById("leagueSelect").value;
+
+    const home=document.getElementById("homeTeam");
+    const away=document.getElementById("awayTeam");
+
+    home.innerHTML=`<option disabled selected hidden>Domácí tým</option>`;
+    away.innerHTML=`<option disabled selected hidden>Hostující tým</option>`;
+
+    const sport=data.sports.find(s=>s.id===sportId);
+    const league=sport?.leagues.find(l=>l.id===leagueId);
+
+    if(!league) return;
+
+    league.teams.forEach(t=>{
+        home.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
+        away.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
+    });
+}
+
+/* ================= CREATE MATCH ================= */
+
+window.createMatch=async function(){
+
+    const sportSelect = document.getElementById("sportSelect");
+    const leagueSelect = document.getElementById("leagueSelect");
+    const dateInput = document.getElementById("date");
+    const homeTeam = document.getElementById("homeTeam");
+    const awayTeam = document.getElementById("awayTeam");
+    const data=await getData();
+    const sportId=sportSelect.value;
+    const leagueId=leagueSelect.value;
+    const sport = data.sports.find(s=>s.id===sportId);
+    const league = sport.leagues.find(l=>l.id===leagueId);
+    const date = dateInput.value;
+    const home=homeTeam.value;
+    const away=awayTeam.value;
+    const seasonSelect = document.getElementById("seasonSelect");
+    const roundSelect = document.getElementById("roundSelect");
+
+let seasonName;
+let roundNumber;
+let roundName;
+
+// ===== SEZÓNA =====
+if(seasonSelect.value==="new"){
+    seasonName = document.getElementById("newSeason").value;
+}else{
+    const seasonObj = league.seasons.find(s=>s.id===seasonSelect.value);
+    seasonName = seasonObj.name;
+}
+
+// ===== KOLO =====
+if(roundSelect.value==="new"){
+    roundNumber = document.getElementById("newRoundNumber").value;
+    roundName = document.getElementById("newRoundName").value;
+}else{
+    const seasonObj = league.seasons.find(s=>s.id===seasonSelect.value);
+    const roundObj = seasonObj.rounds.find(r=>r.id===roundSelect.value);
+    roundNumber = roundObj.number;
+    roundName = roundObj.name;
+}
+    if(!sportId||!leagueId||!seasonName||!roundNumber||!roundName||!date||!home||!away||home===away){
+        alert("Vyplň vše");
+        return;
+    }
+
+    
+
+    if(!league.seasons) league.seasons=[];
+
+let season = league.seasons.find(s=>s.name===seasonName);
+
+if(!season){
+    season={
+        id:generateId(),
+        name:seasonName,
+        rounds:[]
+    };
+    league.seasons.push(season);
+}
+
+let roundObj = season.rounds.find(r=>r.number==roundNumber);
+
+if(!roundObj){
+    roundObj={
+        id:generateId(),
+        number:Number(roundNumber),
+        name:roundName,
+        matches:[]
+    };
+    season.rounds.push(roundObj);
+}
+// uloz datum kola pokud jeste nema
+if(!roundObj.date){
+    roundObj.date = date;
+}
+    roundObj.matches.push({
+        id:generateId(),
+        homeTeam:home,
+        awayTeam:away,
+        date,
+        homeScore:null,
+        awayScore:null,
+        status:"scheduled"
+    });
+
+    await saveData(data);
+    closeModal();
+    render();
+}
+
+/* ================= MATCH LIST ================= */
+
+async function renderMatches(){
+
+const data = await getData();
+const list = document.getElementById("matchList");
+list.innerHTML = "";
+
+data.sports.forEach(sport=>{
+
+    const sportDiv=document.createElement("div");
+    sportDiv.className="card";
+    sportDiv.innerText="⚽ "+sport.name;
+
+    const leagueWrap=document.createElement("div");
+    leagueWrap.style.display="none";
+    leagueWrap.style.marginLeft="15px";
+
+    sportDiv.onclick=()=>{
+        leagueWrap.style.display =
+            leagueWrap.style.display==="none"?"block":"none";
+    };
+
+    list.appendChild(sportDiv);
+    list.appendChild(leagueWrap);
+
+    sport.leagues?.forEach(league=>{
+
+        const leagueDiv=document.createElement("div");
+        leagueDiv.className="card";
+        leagueDiv.innerText="▶ "+league.name;
+
+        const seasonWrap=document.createElement("div");
+        seasonWrap.style.display="none";
+        seasonWrap.style.marginLeft="15px";
+
+        leagueDiv.onclick=()=>{
+            seasonWrap.style.display =
+                seasonWrap.style.display==="none"?"block":"none";
+        };
+
+        leagueWrap.appendChild(leagueDiv);
+        leagueWrap.appendChild(seasonWrap);
+
+        // ⭐ fallback když seasons neexistují
+        const seasons = league.seasons || [{
+            id:"legacy",
+            name:"Starší zápasy",
+            rounds: league.rounds || []
+        }];
+
+        seasons.forEach(season=>{
+
+            const seasonDiv=document.createElement("div");
+            seasonDiv.className="card";
+            seasonDiv.innerText="▶ "+season.name;
+
+            const roundWrap=document.createElement("div");
+            roundWrap.style.display="none";
+            roundWrap.style.marginLeft="15px";
+
+            seasonDiv.onclick=()=>{
+                roundWrap.style.display =
+                    roundWrap.style.display==="none"?"block":"none";
+            };
+
+            seasonWrap.appendChild(seasonDiv);
+            seasonWrap.appendChild(roundWrap);
+
+            season.rounds?.forEach(round=>{
+
+                const roundDiv=document.createElement("div");
+                roundDiv.className="card";
+                roundDiv.innerText="▶ "+round.name;
+
+                const matchWrap=document.createElement("div");
+                matchWrap.style.display="none";
+                matchWrap.style.marginLeft="15px";
+
+                roundDiv.onclick=()=>{
+                    matchWrap.style.display =
+                        matchWrap.style.display==="none"?"block":"none";
+                };
+
+                roundWrap.appendChild(roundDiv);
+                roundWrap.appendChild(matchWrap);
+
+                round.matches?.forEach(match=>{
+
+                    const home=league.teams.find(t=>t.id===match.homeTeam);
+                    const away=league.teams.find(t=>t.id===match.awayTeam);
+
+                    const row=document.createElement("div");
+                    row.className="card";
+                    row.style.display="flex";
+                    row.style.justifyContent="space-between";
+                    row.style.alignItems="center";
+
+                    const info=document.createElement("div");
+                    info.style.cursor="pointer";
+                    info.onclick=()=>{
+                        window.location.href="matchDetail.html?id="+match.id;
+                    };
+
+                    info.innerHTML=`
+<strong>
+${home?.name ?? "?"}
+${match.homeScore ?? "-"}
+:
+${match.awayScore ?? "-"}
+${away?.name ?? "?"}
+</strong>
+<div style="font-size:13px;color:#aaa">${match.date}</div>
+`;
+
+                    const del=document.createElement("div");
+                    del.innerText="✖";
+                    del.style.color="#ff6b6b";
+                    del.style.cursor="pointer";
+
+                    del.onclick=async(e)=>{
+                        e.stopPropagation();
+                        await deleteMatch(match.id);
+                    };
+
+                    row.appendChild(info);
+                    row.appendChild(del);
+                    matchWrap.appendChild(row);
+
+                });
+
+            });
+
+        });
+
+    });
+
+});
+}
+
+async function deleteMatch(matchId){
+
+if(!confirm("Smazat zápas?")) return;
+
+const data = await getData();
+
+data.sports.forEach(sport=>{
+    sport.leagues?.forEach(league=>{
+        league.seasons?.forEach(season=>{
+
+            season.rounds?.forEach(round=>{
+                round.matches =
+                    round.matches.filter(m=>m.id!==matchId);
+            });
+
+            season.rounds =
+                season.rounds.filter(r=>r.matches.length>0);
+        });
+    });
+});
+
+await saveData(data);
+render();
+}
+render()
+
+</script>
+</body>
+</html>

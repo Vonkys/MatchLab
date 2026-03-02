@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match Detail</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+}
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+}
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+}
+.card{
+    background:#1b1b1b;
+    padding:12px;
+    border-radius:10px;
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+}
+button{
+    width:100%;
+    padding:12px;
+    margin-top:12px;
+    border:none;
+    border-radius:8px;
+    background:#2b2b2b;
+    color:white;
+}
+input{
+    background:#111;
+    border:1px solid #333;
+    color:white;
+    border-radius:6px;
+    padding:4px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<span onclick="window.location.href='zapasy.html'" style="cursor:pointer">
+← Zpět
+</span>
+</div>
+
+<div id="app" class="container"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const appFB = initializeApp(firebaseConfig);
+const db = getFirestore(appFB);
+
+async function getData(){
+    const snap = await getDoc(doc(db,"appData","main"));
+    return snap.data();
+}
+
+async function saveData(data){
+    await setDoc(doc(db,"appData","main"),data);
+}
+
+function getMatchId(){
+    return new URLSearchParams(window.location.search).get("id");
+}
+
+function findMatch(data, matchId){
+
+    let match=null;
+    let league=null;
+
+    data.sports.forEach(s=>{
+        s.leagues?.forEach(l=>{
+            l.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(m=>{
+                        if(m.id===matchId){
+                            match=m;
+                            league=l;
+                        }
+                    });
+                });
+            });
+        });
+    });
+
+    return {match,league};
+}
+
+function calculateScore(match){
+
+    let homeGoals = 0;
+    let awayGoals = 0;
+
+    if(!match.playerStats) return;
+
+    (match.homeLineup || []).forEach(pid=>{
+        homeGoals += match.playerStats[pid]?.goals || 0;
+    });
+
+    (match.awayLineup || []).forEach(pid=>{
+        awayGoals += match.playerStats[pid]?.goals || 0;
+    });
+
+    match.homeScore = homeGoals;
+    match.awayScore = awayGoals;
+
+    match.status = "played";
+}
+
+async function render(){
+
+    const data=await getData();
+    const matchId=getMatchId();
+    const result=findMatch(data,matchId);
+
+    if(!result.match){
+        document.getElementById("app").innerHTML="Zápas nenalezen";
+        return;
+    }
+
+    const match=result.match;
+    const league=result.league;
+
+    const homeTeam=league.teams.find(t=>t.id===match.homeTeam);
+    const awayTeam=league.teams.find(t=>t.id===match.awayTeam);
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <h2>
+        ${homeTeam.name}
+        ${match.homeScore ?? "-"}
+        :
+        ${match.awayScore ?? "-"}
+        ${awayTeam.name}
+        </h2>
+
+        <h3>Domácí sestava</h3>
+        <div id="homePlayers"></div>
+
+        <h3>Hosté</h3>
+        <div id="awayPlayers"></div>
+
+        <button id="saveBtn">Uložit změny</button>
+    `;
+
+    renderPlayers(homeTeam.players,"homePlayers","homeLineup",match);
+    renderPlayers(awayTeam.players,"awayPlayers","awayLineup",match);
+   
+  document.getElementById("saveBtn").onclick = async ()=>{
+
+    if(!match.playerStats) match.playerStats={};
+
+    document
+    .querySelectorAll("#homePlayers .card, #awayPlayers .card")
+    .forEach(row=>{
+
+        const checkbox = row.querySelector("input[type=checkbox]");
+        if(!checkbox || !checkbox.checked) return;
+
+        const playerId = row.dataset.playerId;
+
+        const inputs = row.querySelectorAll("input[type=number]");
+
+        const keys = [
+            "minutes","goals","assists","rating",
+            "shots","xg","passesMade","passesTotal"
+        ];
+
+        const stats = {};
+
+        inputs.forEach((input,i)=>{
+            if(input.value !== ""){
+                stats[keys[i]] = Number(input.value);
+            }
+        });
+
+        if(Object.keys(stats).length > 0){
+            match.playerStats[playerId] = stats;
+        }else{
+            delete match.playerStats[playerId];
+        }
+
+    });
+
+    calculateScore(match);
+
+    await saveData(data);
+    window.location.href="zapasy.html";
+};
+}
+
+function renderPlayers(players,containerId,lineupKey,match){
+
+    const container=document.getElementById(containerId);
+    container.innerHTML="";
+
+    if(!match[lineupKey]) match[lineupKey]=[];
+    if(!match.playerStats) match.playerStats={};
+
+    players
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+    .forEach(p=>{
+
+        if(p.status==="injured" || p.status==="suspended") return;
+
+        const row=document.createElement("div");
+        row.className="card";
+        row.dataset.playerId = p.id;
+        const top=document.createElement("div");
+        top.style.display="flex";
+        top.style.alignItems="center";
+        top.style.gap="10px";
+
+        const checkbox=document.createElement("input");
+        checkbox.type="checkbox";
+        checkbox.checked=match[lineupKey].includes(p.id);
+
+        const name=document.createElement("div");
+        name.innerText=p.name;
+
+        top.appendChild(checkbox);
+        top.appendChild(name);
+        row.appendChild(top);
+
+        const statsDiv=document.createElement("div");
+        statsDiv.style.display="none";
+        statsDiv.style.flexWrap="wrap";
+        statsDiv.style.gap="6px";
+        statsDiv.style.marginTop="8px";
+
+        const fields=[
+    {key:"minutes",ph:"Min"},
+    {key:"goals",ph:"G"},
+    {key:"assists",ph:"A"},
+    {key:"rating",ph:"⭐",step:"0.1"},
+    {key:"shots",ph:"Stř"},
+    {key:"xg",ph:"xG",step:"0.01"},
+    {key:"passesMade",ph:"P✓"},
+    {key:"passesTotal",ph:"PΣ"}
+];
+
+        const inputs={};
+
+        fields.forEach(f=>{
+            const input=document.createElement("input");
+            input.type="number";
+            if(f.step) input.step=f.step;
+            input.placeholder=f.ph;
+            input.style.width="60px";
+            statsDiv.appendChild(input);
+            inputs[f.key]=input;
+        });
+
+        row.appendChild(statsDiv);
+  
+     // ===== NAČTENÍ ULOŽENÝCH STATISTIK =====
+if(match.playerStats?.[p.id]){
+
+    Object.keys(inputs).forEach(key=>{
+        inputs[key].value =
+            match.playerStats[p.id][key] ?? "";
+    });
+
+    // zobraz statistiky pokud už hráč byl vybrán
+    statsDiv.style.display = "flex";
+    row.style.background = "#163a1f";
+    row.style.border = "1px solid #2ecc71";
+}
+   
+        function updateStyle(){
+            if(checkbox.checked){
+                row.style.background="#163a1f";
+                row.style.border="1px solid #2ecc71";
+                statsDiv.style.display="flex";
+            }else{
+                row.style.background="#1b1b1b";
+                row.style.border="none";
+                statsDiv.style.display="none";
+            }
+        }
+
+        updateStyle();
+
+        checkbox.onchange=()=>{
+            if(checkbox.checked){
+                match[lineupKey].push(p.id);
+            }else{
+                match[lineupKey]=match[lineupKey].filter(id=>id!==p.id);
+                delete match.playerStats[p.id];
+            }
+            updateStyle();
+        };
+
+        
+
+        container.appendChild(row);
+    });
+}
+
+await render();
+
+</script>
+</body>
+</html>
