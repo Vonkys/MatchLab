@@ -119,22 +119,33 @@ function calculateScore(match){
     let homeGoals = 0;
     let awayGoals = 0;
 
+    let homeOwnGoals = 0;
+    let awayOwnGoals = 0;
+
     if(!match.playerStats) return;
 
     (match.homeLineup || []).forEach(pid=>{
-        homeGoals += match.playerStats[pid]?.goals || 0;
+        const stats = match.playerStats[pid];
+        if(!stats) return;
+
+        homeGoals += stats.goals || 0;
+        homeOwnGoals += stats.ownGoals || 0;
     });
 
     (match.awayLineup || []).forEach(pid=>{
-        awayGoals += match.playerStats[pid]?.goals || 0;
+        const stats = match.playerStats[pid];
+        if(!stats) return;
+
+        awayGoals += stats.goals || 0;
+        awayOwnGoals += stats.ownGoals || 0;
     });
 
-    match.homeScore = homeGoals;
-    match.awayScore = awayGoals;
+    // vlastní gól domácích = gól pro hosty
+    match.homeScore = homeGoals + awayOwnGoals;
+    match.awayScore = awayGoals + homeOwnGoals;
 
     match.status = "played";
 }
-
 async function render(){
 
     const data=await getData();
@@ -191,9 +202,16 @@ async function render(){
         const inputs = row.querySelectorAll("input[type=number]");
 
         const keys = [
-            "minutes","goals","assists","rating",
-            "shots","xg","passesMade","passesTotal"
-        ];
+    "minutes",
+    "goals",
+    "ownGoals",
+    "assists",
+    "rating",
+    "shots",
+    "xg",
+    "passesMade",
+    "passesTotal"
+];
 
         const stats = {};
 
@@ -261,6 +279,7 @@ function renderPlayers(players,containerId,lineupKey,match){
         const fields=[
     {key:"minutes",ph:"Min"},
     {key:"goals",ph:"G"},
+    {key:"ownGoals",ph:"OG"},
     {key:"assists",ph:"A"},
     {key:"rating",ph:"⭐",step:"0.1"},
     {key:"shots",ph:"Stř"},
