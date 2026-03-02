@@ -134,10 +134,9 @@ async function getData(){
 }
 
 async function saveData(data){
-    localStorage.setItem("matchlab",JSON.stringify(data));
-    const ref = doc(db,"appData","main");
-    await setDoc(ref,data);
+    await setDoc(doc(db,"appData","main"), data);
 }
+
 
 function generateId(){
     return "id_"+Date.now()+Math.random();
@@ -526,28 +525,17 @@ ${away?.name ?? "?"}
 <div style="font-size:13px;color:#aaa">${match.date}</div>
 `;
 
-                    const del=document.createElement("div");
-                    del.innerText="✖";
-                    del.style.color="#ff6b6b";
-                    del.style.cursor="pointer";
+const del=document.createElement("div");del.innerText="✖";del.style.color="#ff6b6b";del.style.cursor="pointer";
+del.onclick=async(e)=>{e.stopPropagation();await deleteMatch(match.id);
+};
 
-                    del.onclick=async(e)=>{
-                        e.stopPropagation();
-                        await deleteMatch(match.id);
-                    };
-
-                    row.appendChild(info);
-                    row.appendChild(del);
-                    matchWrap.appendChild(row);
-
-                });
-
-            });
-
-        });
-
-    });
-
+row.appendChild(info);
+row.appendChild(del);
+matchWrap.appendChild(row);
+});
+});
+});
+});
 });
 }
 
