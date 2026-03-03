@@ -149,21 +149,23 @@ function calculateScore(match){
 
 function rebuildPlayerStats(data){
 
+    // ===== RESET =====
     data.sports.forEach(sport=>{
         sport.leagues?.forEach(league=>{
             league.teams?.forEach(team=>{
                 team.players?.forEach(player=>{
 
-                    // reset totals
                     player.stats.total = {
-                    matches:0,
-                    minutes:0,
-                    goals:0,
-                    ownGoals:0,
-                    assists:0,
-                    yellow:0,
-                    red:0
-                   };
+                        matches:0,
+                        minutes:0,
+                        goals:0,
+                        ownGoals:0,
+                        assists:0,
+                        yellow:0,
+                        red:0,
+                        ratingSum:0,
+                        avgRating:0
+                    };
 
                     player.stats.seasons = {};
                 });
@@ -171,6 +173,8 @@ function rebuildPlayerStats(data){
         });
     });
 
+
+    // ===== SBĚR DAT ZE ZÁPASŮ =====
     data.sports.forEach(sport=>{
         sport.leagues?.forEach(league=>{
             league.seasons?.forEach(season=>{
@@ -188,20 +192,20 @@ function rebuildPlayerStats(data){
                                 const stats = match.playerStats[player.id];
                                 if(!stats) return;
 
-                                // season init
+                                // ===== INIT SEASON =====
                                 if(!player.stats.seasons[seasonId]){
                                     player.stats.seasons[seasonId] = {
-                                    matches:0,
-                                    minutes:0,
-                                    goals:0,
-                                    ownGoals:0,
-                                    assists:0,
-                                    yellow:0,
-                                    red:0
-                                };
+                                        matches:0,
+                                        minutes:0,
+                                        goals:0,
+                                        ownGoals:0,
+                                        assists:0,
+                                        yellow:0,
+                                        red:0
+                                    };
                                 }
 
-                                // TOTAL
+                                // ===== TOTAL =====
                                 player.stats.total.matches += 1;
                                 player.stats.total.minutes += stats.minutes || 0;
                                 player.stats.total.goals += stats.goals || 0;
@@ -209,7 +213,13 @@ function rebuildPlayerStats(data){
                                 player.stats.total.assists += stats.assists || 0;
                                 player.stats.total.yellow += stats.yellow || 0;
                                 player.stats.total.red += stats.red || 0;
-                                // SEASON
+
+                                // 🔥 rating bereme vždy pokud existuje
+                                if(stats.rating !== undefined){
+                                    player.stats.total.ratingSum += stats.rating;
+                                }
+
+                                // ===== SEASON =====
                                 player.stats.seasons[seasonId].matches += 1;
                                 player.stats.seasons[seasonId].minutes += stats.minutes || 0;
                                 player.stats.seasons[seasonId].goals += stats.goals || 0;
@@ -217,6 +227,7 @@ function rebuildPlayerStats(data){
                                 player.stats.seasons[seasonId].assists += stats.assists || 0;
                                 player.stats.seasons[seasonId].yellow += stats.yellow || 0;
                                 player.stats.seasons[seasonId].red += stats.red || 0;
+
                             });
                         });
 
@@ -225,6 +236,27 @@ function rebuildPlayerStats(data){
             });
         });
     });
+
+
+    // ===== VÝPOČET PRŮMĚRU RATINGU =====
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.teams?.forEach(team=>{
+                team.players?.forEach(player=>{
+
+                    const total = player.stats.total;
+
+                    if(total.matches > 0 && total.ratingSum > 0){
+                        total.avgRating = total.ratingSum / total.matches;
+                    }else{
+                        total.avgRating = 0;
+                    }
+
+                });
+            });
+        });
+    });
+
 }
 
 
@@ -424,7 +456,8 @@ if(match.refereeId){
 
         inputs.forEach((input,i)=>{
             if(input.value !== ""){
-                stats[keys[i]] = Number(input.value);
+                const raw = input.value.replace(",", ".");
+stats[keys[i]] = Number(raw);
             }
         });
 
@@ -459,10 +492,18 @@ function renderPlayers(players,containerId,lineupKey,match){
     .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
     .forEach(p=>{
 
-        if(p.status==="injured" || p.status==="suspended") return;
+        
 
         const row=document.createElement("div");
         row.className="card";
+        if(p.status==="injured"){
+        row.style.opacity="0.6";
+        }
+
+        if(p.status==="suspended"){
+        row.style.opacity="0.6";
+        row.style.border="1px solid #ff9f43";
+        }
         row.dataset.playerId = p.id;
         const top=document.createElement("div");
         top.style.display="flex";
