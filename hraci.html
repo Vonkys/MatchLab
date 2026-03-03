@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statistiky hráčů</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+}
+
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+    padding:20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th, td{
+    padding:8px;
+    text-align:center;
+    border-bottom:1px solid #222;
+}
+
+th{
+    background:#1b1b1b;
+}
+
+.player{
+    text-align:left;
+}
+
+.team{
+    font-size:12px;
+    opacity:0.7;
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<span onclick="window.location.href='tabulky.html'" style="cursor:pointer">
+← Zpět na tabulku
+</span>
+</div>
+
+<div class="container">
+    <h2 id="leagueTitle">Statistiky hráčů</h2>
+    <table id="table"></table>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function loadPlayers(){
+
+    const snap = await getDoc(doc(db,"appData","main"));
+    const data = snap.data();
+
+    const sport = data.sports[0];
+    const league = sport.leagues[0];
+
+    document.getElementById("leagueTitle").textContent =
+        `Statistiky hráčů – ${league.name}`;
+
+    const season = league.seasons?.[0];
+    if(!season){
+        document.getElementById("table").innerHTML =
+            "<tr><td>Žádná sezóna</td></tr>";
+        return;
+    }
+
+    const seasonId = season.id;
+
+    let rows = [];
+
+    league.teams.forEach(team=>{
+
+        team.players.forEach(player=>{
+
+            const stats = player.stats?.seasons?.[seasonId];
+            if(!stats) return;
+
+            if(stats.matches === 0) return;
+
+            rows.push({
+                name:player.name,
+                team:team.name,
+                matches:stats.matches,
+                minutes:stats.minutes || 0,
+                goals:stats.goals || 0,
+                assists:stats.assists || 0,
+                yellow:stats.yellow || 0,
+                red:stats.red || 0,
+                goalsPerMatch: stats.matches > 0
+                    ? (stats.goals / stats.matches).toFixed(2)
+                    : 0
+            });
+
+        });
+
+    });
+
+    // 🔥 řazení
+    rows.sort((a,b)=>{
+        if(b.goals !== a.goals) return b.goals - a.goals;
+        if(b.assists !== a.assists) return b.assists - a.assists;
+        return a.matches - b.matches;
+    });
+
+    renderTable(rows);
+}
+
+function renderTable(rows){
+
+    const table = document.getElementById("table");
+
+    table.innerHTML = `
+        <tr>
+            <th>#</th>
+            <th class="player">Hráč</th>
+            <th>Tým</th>
+            <th>Z</th>
+            <th>Min</th>
+            <th>G</th>
+            <th>A</th>
+            <th>🟨</th>
+            <th>🟥</th>
+            <th>G/Z</th>
+        </tr>
+    `;
+
+    rows.forEach((r,i)=>{
+
+        table.innerHTML += `
+            <tr>
+                <td>${i+1}</td>
+                <td class="player">${r.name}</td>
+                <td class="team">${r.team}</td>
+                <td>${r.matches}</td>
+                <td>${r.minutes}</td>
+                <td><b>${r.goals}</b></td>
+                <td>${r.assists}</td>
+                <td>${r.yellow}</td>
+                <td>${r.red}</td>
+                <td>${r.goalsPerMatch}</td>
+            </tr>
+        `;
+    });
+}
+
+loadPlayers();
+
+</script>
+
+</body>
+</html>
