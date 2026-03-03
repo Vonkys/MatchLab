@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match Detail</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+}
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+}
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+}
+.card{
+    background:#1b1b1b;
+    padding:12px;
+    border-radius:10px;
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+}
+button{
+    width:100%;
+    padding:12px;
+    margin-top:12px;
+    border:none;
+    border-radius:8px;
+    background:#2b2b2b;
+    color:white;
+}
+input{
+    background:#111;
+    border:1px solid #333;
+    color:white;
+    border-radius:6px;
+    padding:4px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<span onclick="window.location.href='zapasy.html'" style="cursor:pointer">
+← Zpět
+</span>
+</div>
+
+<div id="app" class="container"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const appFB = initializeApp(firebaseConfig);
+const db = getFirestore(appFB);
+
+async function getData(){
+    const snap = await getDoc(doc(db,"appData","main"));
+    return snap.data();
+}
+
+async function saveData(data){
+    await setDoc(doc(db,"appData","main"),data);
+}
+
+function getMatchId(){
+    return new URLSearchParams(window.location.search).get("id");
+}
+
+function findMatch(data, matchId){
+
+    let match=null;
+    let league=null;
+
+    data.sports.forEach(s=>{
+        s.leagues?.forEach(l=>{
+            l.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(m=>{
+                        if(m.id===matchId){
+                            match=m;
+                            league=l;
+                        }
+                    });
+                });
+            });
+        });
+    });
+
+    return {match,league};
+}
+
+function calculateScore(match){
+
+    let homeGoals = 0;
+    let awayGoals = 0;
+
+    let homeOwnGoals = 0;
+    let awayOwnGoals = 0;
+
+    if(!match.playerStats) return;
+
+    (match.homeLineup || []).forEach(pid=>{
+        const stats = match.playerStats[pid];
+        if(!stats) return;
+
+        homeGoals += stats.goals || 0;
+        homeOwnGoals += stats.ownGoals || 0;
+    });
+
+    (match.awayLineup || []).forEach(pid=>{
+        const stats = match.playerStats[pid];
+        if(!stats) return;
+
+        awayGoals += stats.goals || 0;
+        awayOwnGoals += stats.ownGoals || 0;
+    });
+
+    // vlastní gól domácích = gól pro hosty
+    match.homeScore = homeGoals + awayOwnGoals;
+    match.awayScore = awayGoals + homeOwnGoals;
+
+    match.status = "played";
+}
+
+function rebuildPlayerStats(data){
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.teams?.forEach(team=>{
+                team.players?.forEach(player=>{
+
+                    // reset totals
+                    player.stats.total = {
+                    matches:0,
+                    minutes:0,
+                    goals:0,
+                    ownGoals:0,
+                    assists:0,
+                    yellow:0,
+                    red:0
+                   };
+
+                    player.stats.seasons = {};
+                });
+            });
+        });
+    });
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(match=>{
+
+                        if(match.status !== "played") return;
+                        if(!match.playerStats) return;
+
+                        const seasonId = season.id;
+
+                        league.teams.forEach(team=>{
+                            team.players.forEach(player=>{
+
+                                const stats = match.playerStats[player.id];
+                                if(!stats) return;
+
+                                // season init
+                                if(!player.stats.seasons[seasonId]){
+                                    player.stats.seasons[seasonId] = {
+                                    matches:0,
+                                    minutes:0,
+                                    goals:0,
+                                    ownGoals:0,
+                                    assists:0,
+                                    yellow:0,
+                                    red:0
+                                };
+                                }
+
+                                // TOTAL
+                                player.stats.total.matches += 1;
+                                player.stats.total.minutes += stats.minutes || 0;
+                                player.stats.total.goals += stats.goals || 0;
+                                player.stats.total.ownGoals += stats.ownGoals || 0;
+                                player.stats.total.assists += stats.assists || 0;
+                                player.stats.total.yellow += stats.yellow || 0;
+                                player.stats.total.red += stats.red || 0;
+                                // SEASON
+                                player.stats.seasons[seasonId].matches += 1;
+                                player.stats.seasons[seasonId].minutes += stats.minutes || 0;
+                                player.stats.seasons[seasonId].goals += stats.goals || 0;
+                                player.stats.seasons[seasonId].ownGoals += stats.ownGoals || 0;
+                                player.stats.seasons[seasonId].assists += stats.assists || 0;
+                                player.stats.seasons[seasonId].yellow += stats.yellow || 0;
+                                player.stats.seasons[seasonId].red += stats.red || 0;
+                            });
+                        });
+
+                    });
+                });
+            });
+        });
+    });
+}
+
+
+
+function rebuildTeamStats(data){
+
+    data.sports.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+
+            league.teams?.forEach(team=>{
+    team.stats = {
+        seasons:{}
+    };
+});
+            league.seasons?.forEach(season=>{
+                const seasonId = season.id;
+
+league.teams.forEach(team=>{
+    team.stats.seasons[seasonId] = {
+        played:0,
+        wins:0,
+        draws:0,
+        losses:0,
+        goalsFor:0,
+        goalsAgainst:0,
+        xGFor:0,
+        xGAgainst:0,
+        points:0
+    };
+});
+                
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(match=>{
+
+                        if(match.status !== "played") return;
+
+                        const homeTeam = league.teams.find(t=>t.id===match.homeTeam);
+                        const awayTeam = league.teams.find(t=>t.id===match.awayTeam);
+
+                        if(!homeTeam || !awayTeam) return;
+                        let homeXG = 0;
+                        let awayXG = 0;
+
+                        if(match.playerStats){
+
+                        (match.homeLineup || []).forEach(pid=>{
+                        homeXG += match.playerStats[pid]?.xg || 0;
+                        });
+
+                        (match.awayLineup || []).forEach(pid=>{
+                        awayXG += match.playerStats[pid]?.xg || 0;
+                        });
+
+}
+                        const homeStats = homeTeam.stats.seasons[seasonId];
+const awayStats = awayTeam.stats.seasons[seasonId];
+
+homeStats.played++;
+awayStats.played++;
+
+homeStats.goalsFor += match.homeScore || 0;
+homeStats.goalsAgainst += match.awayScore || 0;
+
+awayStats.goalsFor += match.awayScore || 0;
+awayStats.goalsAgainst += match.homeScore || 0;
+
+homeStats.xGFor += homeXG;
+homeStats.xGAgainst += awayXG;
+
+awayStats.xGFor += awayXG;
+awayStats.xGAgainst += homeXG;
+                        
+if(match.homeScore > match.awayScore){
+
+    homeStats.wins++;
+    homeStats.points += 3;
+
+    awayStats.losses++;
+
+}
+else if(match.homeScore < match.awayScore){
+
+    awayStats.wins++;
+    awayStats.points += 3;
+
+    homeStats.losses++;
+
+}
+else{
+
+    homeStats.draws++;
+    awayStats.draws++;
+
+    homeStats.points += 1;
+    awayStats.points += 1;
+
+}
+                    });
+                });
+            });
+
+        });
+    });
+}
+
+async function render(){
+
+    const data=await getData();
+    const matchId=getMatchId();
+    const result=findMatch(data,matchId);
+
+    if(!result.match){
+        document.getElementById("app").innerHTML="Zápas nenalezen";
+        return;
+    }
+
+    const match=result.match;
+    const league=result.league;
+
+    const homeTeam=league.teams.find(t=>t.id===match.homeTeam);
+    const awayTeam=league.teams.find(t=>t.id===match.awayTeam);
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <h2>
+${homeTeam.name}
+${match.homeScore ?? "-"}
+:
+${match.awayScore ?? "-"}
+${awayTeam.name}
+</h2>
+
+<label>Rozhodčí</label>
+<select id="refereeSelect"></select>
+
+<h3>Domácí sestava</h3>
+        <div id="homePlayers"></div>
+
+        <h3>Hosté</h3>
+        <div id="awayPlayers"></div>
+
+        <button id="saveBtn">Uložit změny</button>
+    `;
+
+    renderPlayers(homeTeam.players,"homePlayers","homeLineup",match);
+    renderPlayers(awayTeam.players,"awayPlayers","awayLineup",match);
+    const select = document.getElementById("refereeSelect");
+
+if(!league.referees) league.referees = [];
+
+select.innerHTML = `<option value="">-- nevybrán --</option>`;
+
+league.referees.forEach(r=>{
+    const option = document.createElement("option");
+    option.value = r.id;
+    option.textContent = r.name;
+    select.appendChild(option);
+});
+
+// pokud už byl uložen
+if(match.refereeId){
+    select.value = match.refereeId;
+}
+  document.getElementById("saveBtn").onclick = async ()=>{
+
+    match.refereeId = document.getElementById("refereeSelect").value || null;
+
+    if(!match.playerStats) match.playerStats={};
+
+    document
+    .querySelectorAll("#homePlayers .card, #awayPlayers .card")
+    .forEach(row=>{
+
+        const checkbox = row.querySelector("input[type=checkbox]");
+        if(!checkbox || !checkbox.checked) return;
+
+        const playerId = row.dataset.playerId;
+
+        const inputs = row.querySelectorAll("input[type=number]");
+
+       const keys = [
+    "minutes",
+    "goals",
+    "ownGoals",
+    "assists",
+    "yellow",
+    "red",
+    "rating",
+    "shots",
+    "xg",
+    "passesMade",
+    "passesTotal"
+];
+
+        const stats = {};
+
+        inputs.forEach((input,i)=>{
+            if(input.value !== ""){
+                stats[keys[i]] = Number(input.value);
+            }
+        });
+
+        if(Object.keys(stats).length > 0){
+            match.playerStats[playerId] = stats;
+        }else{
+            delete match.playerStats[playerId];
+        }
+
+    });
+
+    calculateScore(match);
+
+rebuildPlayerStats(data);
+rebuildTeamStats(data);
+
+await saveData(data);
+window.location.href="zapasy.html";
+};
+}
+
+function renderPlayers(players,containerId,lineupKey,match){
+
+    const container=document.getElementById(containerId);
+    container.innerHTML="";
+
+    if(!match[lineupKey]) match[lineupKey]=[];
+    if(!match.playerStats) match.playerStats={};
+
+    players
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+    .forEach(p=>{
+
+        if(p.status==="injured" || p.status==="suspended") return;
+
+        const row=document.createElement("div");
+        row.className="card";
+        row.dataset.playerId = p.id;
+        const top=document.createElement("div");
+        top.style.display="flex";
+        top.style.alignItems="center";
+        top.style.gap="10px";
+
+        const checkbox=document.createElement("input");
+        checkbox.type="checkbox";
+        checkbox.checked=match[lineupKey].includes(p.id);
+
+        const name=document.createElement("div");
+        name.innerText=p.name;
+
+        top.appendChild(checkbox);
+        top.appendChild(name);
+        row.appendChild(top);
+
+        const statsDiv=document.createElement("div");
+        statsDiv.style.display="none";
+        statsDiv.style.flexWrap="wrap";
+        statsDiv.style.gap="6px";
+        statsDiv.style.marginTop="8px";
+
+        const fields=[
+    {key:"minutes",ph:"Min"},
+    {key:"goals",ph:"G"},
+    {key:"ownGoals",ph:"OG"},
+    {key:"assists",ph:"A"},
+    {key:"yellow",ph:"🟨"},
+    {key:"red",ph:"🟥"},
+    {key:"rating",ph:"⭐",step:"0.1"},
+    {key:"shots",ph:"Stř"},
+    {key:"xg",ph:"xG",step:"0.01"},
+    {key:"passesMade",ph:"P✓"},
+    {key:"passesTotal",ph:"PΣ"}
+];
+
+        const inputs={};
+
+        fields.forEach(f=>{
+            const input=document.createElement("input");
+            input.type="number";
+            if(f.step) input.step=f.step;
+            input.placeholder=f.ph;
+            input.style.width="60px";
+            statsDiv.appendChild(input);
+            inputs[f.key]=input;
+        });
+
+        row.appendChild(statsDiv);
+  
+     // ===== NAČTENÍ ULOŽENÝCH STATISTIK =====
+if(match.playerStats?.[p.id]){
+
+    Object.keys(inputs).forEach(key=>{
+        inputs[key].value =
+            match.playerStats[p.id][key] ?? "";
+    });
+
+    // zobraz statistiky pokud už hráč byl vybrán
+    statsDiv.style.display = "flex";
+    row.style.background = "#163a1f";
+    row.style.border = "1px solid #2ecc71";
+}
+   
+        function updateStyle(){
+            if(checkbox.checked){
+                row.style.background="#163a1f";
+                row.style.border="1px solid #2ecc71";
+                statsDiv.style.display="flex";
+            }else{
+                row.style.background="#1b1b1b";
+                row.style.border="none";
+                statsDiv.style.display="none";
+            }
+        }
+
+        updateStyle();
+
+        checkbox.onchange=()=>{
+            if(checkbox.checked){
+                match[lineupKey].push(p.id);
+            }else{
+                match[lineupKey]=match[lineupKey].filter(id=>id!==p.id);
+                delete match.playerStats[p.id];
+            }
+            updateStyle();
+        };
+
+        
+
+        container.appendChild(row);
+    });
+}
+
+await render();
+
+</script>
+</body>
+</html>
