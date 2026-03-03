@@ -553,7 +553,7 @@ async function addPlayer(){
     // 🔥 základ hráče
     position:"ATT",          // default útočník
     status:"available",      // available | injured | suspended
-    impactRating:1.0,        // síla hráče (později model)
+    
 
     // statistiky
    stats:{
@@ -622,23 +622,30 @@ async function renderPlayerDetail(){
             <option value="suspended">Trest</option>
         </select>
 
-        <label>Impact rating</label>
-        <input type="number" step="0.1" id="impact">
+        
 
         <button id="savePlayerBtn">Uložit</button>
+
+<hr style="margin:20px 0; opacity:0.2;">
+
+<h3>Výkon</h3>
+
+<div style="line-height:1.6">
+⭐ Průměr rating: ${(player.stats?.total?.avgRating || 0).toFixed(2)}
+</div>
     `;
 
     document.querySelector(".back").onclick = goBack;
 
     document.getElementById("position").value = player.position || "ATT";
     document.getElementById("status").value = player.status || "available";
-    document.getElementById("impact").value = player.impactRating || 1.0;
+    
 
     document.getElementById("savePlayerBtn").onclick = async ()=>{
 
     player.position=document.getElementById("position").value;
     player.status=document.getElementById("status").value;
-    player.impactRating=parseFloat(document.getElementById("impact").value);
+    
 
     await saveData(data);
 
