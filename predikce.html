@@ -54,9 +54,8 @@ button:hover{
 
 <div class="container">
     <h2>Predikce</h2>
-    <p style="opacity:0.7; margin-top:20px;">
-        🚧 Bude doděláno...
-    </p>
+    <div id="matchList" style="margin-top:20px;"></div>
+</div>
 
     <button onclick="window.location.href='index.html'">
         Zpět na hlavní menu
@@ -64,4 +63,107 @@ button:hover{
 </div>
 
 </body>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function loadUpcomingMatches(){
+
+    const snap = await getDoc(doc(db,"appData","main"));
+    const data = snap.data();
+
+    const list = document.getElementById("matchList");
+    list.innerHTML = "";
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    let upcoming = [];
+
+    data.sports?.forEach(sport=>{
+        sport.leagues?.forEach(league=>{
+            league.seasons?.forEach(season=>{
+                season.rounds?.forEach(round=>{
+                    round.matches?.forEach(match=>{
+
+                        if(match.status !== "scheduled") return;
+                        if(!match.date) return;
+
+                        const matchDate = new Date(match.date);
+                        matchDate.setHours(0,0,0,0);
+
+                        if(matchDate >= today){
+
+                            const home = league.teams.find(t=>t.id===match.homeTeam);
+                            const away = league.teams.find(t=>t.id===match.awayTeam);
+
+                            upcoming.push({
+                                match,
+                                league,
+                                sport,
+                                home,
+                                away
+                            });
+                        }
+
+                    });
+                });
+            });
+        });
+    });
+
+    // seřazení podle data
+    upcoming.sort((a,b)=>{
+        return new Date(a.match.date) - new Date(b.match.date);
+    });
+
+    if(upcoming.length === 0){
+        list.innerHTML = "<p style='opacity:0.6'>Žádné budoucí zápasy</p>";
+        return;
+    }
+
+    upcoming.forEach(item=>{
+
+        const card = document.createElement("div");
+        card.style.background = "#1b1b1b";
+        card.style.padding = "15px";
+        card.style.borderRadius = "12px";
+        card.style.marginBottom = "12px";
+        card.style.cursor = "pointer";
+        card.style.border = "1px solid #222";
+
+        card.innerHTML = `
+            <div style="font-weight:bold;font-size:16px;">
+                ${item.home?.name || "?"} – ${item.away?.name || "?"}
+            </div>
+            <div style="font-size:13px;opacity:0.6;margin-top:4px;">
+                ${item.match.date}
+            </div>
+        `;
+
+        card.onclick = ()=>{
+            window.location.href = "predictionDetail.html?id=" + item.match.id;
+        };
+
+        list.appendChild(card);
+    });
+}
+
+loadUpcomingMatches();
+
+</script>
 </html>
