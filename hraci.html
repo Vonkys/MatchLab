@@ -56,6 +56,16 @@ th:hover{
     font-size:12px;
     opacity:0.7;
 }
+
+.position{
+    display:inline-block;
+    font-size:10px;
+    padding:2px 6px;
+    border-radius:4px;
+    margin-right:6px;
+    font-weight:bold;
+}
+
 </style>
 </head>
 <body>
@@ -124,6 +134,7 @@ window.rows = rows;
    rows.push({
     name:player.name,
     team:team.name,
+    position:player.position || "ATT",
     matches:stats.matches,
     minutes:stats.minutes || 0,
     goals:stats.goals || 0,
@@ -166,6 +177,14 @@ passAccuracy: (stats.passesTotal || 0) > 0
     renderTable(window.rows);
 }
 
+const positionColors = {
+    GK:"#3498db",
+    DEF:"#2ecc71",
+    MID:"#f1c40f",
+    ATT:"#e74c3c"
+};
+
+
 function renderTable(rows){
 
     const table = document.getElementById("table");
@@ -195,24 +214,37 @@ function renderTable(rows){
         rows.forEach((r,i)=>{
 
     table.innerHTML += `
-        <tr>
-            <td>${i+1}</td>
-            <td class="player">${r.name}</td>
-            <td class="team">${r.team}</td>
-            <td><b>${r.avgRating.toFixed(2)}</b></td>
-            <td>${r.matches}</td>
-            <td>${r.minutes}</td>
-            <td><b>${r.goals}</b></td>
-            <td>${r.assists}</td>
-            <td>${r.yellow}</td>
-            <td>${r.red}</td>
-            <td>${r.goalsPer90}</td>
-            <td>${r.passes}</td>
-            <td>${r.passesCompleted}</td>
-            <td>${r.passAccuracy}%</td>
-            <td>${r.xgPer90}</td>
-        </tr>
-    `;
+<tr>
+
+<td>${i+1}</td>
+
+<td class="player">
+
+<span class="position"
+style="background:${positionColors[r.position]}">
+${r.position}
+</span>
+
+${r.name}
+
+</td>
+
+<td class="team">${r.team}</td>
+<td><b>${r.avgRating.toFixed(2)}</b></td>
+<td>${r.matches}</td>
+<td>${r.minutes}</td>
+<td><b>${r.goals}</b></td>
+<td>${r.assists}</td>
+<td>${r.yellow}</td>
+<td>${r.red}</td>
+<td>${r.goalsPer90}</td>
+<td>${r.passes}</td>
+<td>${r.passesCompleted}</td>
+<td>${r.passAccuracy}%</td>
+<td>${r.xgPer90}</td>
+
+</tr>
+`;
 });
 }
 
