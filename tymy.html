@@ -488,17 +488,38 @@ async function renderPlayers(){
         ATT: "⚡ Útočníci"
     };
 
+    const positionColors = {
+    GK: "#3498db",   // modrá
+    DEF: "#2ecc71",  // zelená
+    MID: "#f1c40f",  // žlutá
+    ATT: "#e74c3c"   // červená
+};
+    
     Object.keys(groups).forEach(pos=>{
 
-        if(groups[pos].length === 0) return;
+    if(groups[pos].length === 0) return;
 
-        const title=document.createElement("h3");
-        title.style.marginTop="20px";
-        title.style.opacity="0.7";
-        title.textContent = positionLabels[pos] || pos;
-        list.appendChild(title);
+    // === SEKČNÍ WRAPPER ===
+    const section = document.createElement("div");
+    section.style.marginTop = "20px";
+    section.style.padding = "12px";
+    section.style.borderRadius = "10px";
+    section.style.background = positionColors[pos] + "15";
+    section.style.border = "1px solid " + positionColors[pos];
 
-        groups[pos].forEach(p=>{
+    // === NADPIS ===
+    const title = document.createElement("h3");
+    title.style.marginBottom = "10px";
+    title.style.color = positionColors[pos];
+    title.textContent = positionLabels[pos] || pos;
+
+    section.appendChild(title);
+
+    // === SEŘAZENÍ HRÁČŮ ABECEDNĚ ===
+    groups[pos]
+        .slice()
+        .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+        .forEach(p=>{
 
             const div=document.createElement("div");
             div.className="card";
@@ -531,9 +552,9 @@ async function renderPlayers(){
 
             div.querySelector(".delete").onclick=()=>deletePlayer(p.id);
 
-            list.appendChild(div);
+           section.appendChild(div);
         });
-
+            list.appendChild(section);
     });
 }
 async function addPlayer(){
