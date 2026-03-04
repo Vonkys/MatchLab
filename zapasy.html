@@ -461,6 +461,10 @@ data.sports.forEach(sport=>{
             rounds: league.rounds || []
         }];
 
+        seasons.sort((a,b)=>{
+    return b.name.localeCompare(a.name);
+});
+        
         seasons.forEach(season=>{
 
             const seasonDiv=document.createElement("div");
@@ -479,7 +483,9 @@ data.sports.forEach(sport=>{
             seasonWrap.appendChild(seasonDiv);
             seasonWrap.appendChild(roundWrap);
 
-            season.rounds?.forEach(round=>{
+            (season.rounds || [])
+    .sort((a,b)=> b.number - a.number)
+    .forEach(round=>{
 
                 const roundDiv=document.createElement("div");
                 roundDiv.className="card";
