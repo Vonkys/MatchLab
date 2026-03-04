@@ -195,14 +195,17 @@ function rebuildPlayerStats(data){
                                 // ===== INIT SEASON =====
                                 if(!player.stats.seasons[seasonId]){
                                     player.stats.seasons[seasonId] = {
-                                        matches:0,
-                                        minutes:0,
-                                        goals:0,
-                                        ownGoals:0,
-                                        assists:0,
-                                        yellow:0,
-                                        red:0
-                                    };
+                                    matches:0,
+                                    minutes:0,
+                                    goals:0,
+                                    ownGoals:0,
+                                    assists:0,
+                                    yellow:0,
+                                    red:0,
+                                    passesMade:0,
+                                    passesTotal:0,
+                                    xg:0
+                                 };
                                 }
 
                                 // ===== TOTAL =====
@@ -227,7 +230,9 @@ function rebuildPlayerStats(data){
                                 player.stats.seasons[seasonId].assists += stats.assists || 0;
                                 player.stats.seasons[seasonId].yellow += stats.yellow || 0;
                                 player.stats.seasons[seasonId].red += stats.red || 0;
-
+                                player.stats.seasons[seasonId].passesMade += stats.passesMade || 0;
+                                player.stats.seasons[seasonId].passesTotal += stats.passesTotal || 0;
+                                player.stats.seasons[seasonId].xg += stats.xg || 0;
                             });
                         });
 
