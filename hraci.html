@@ -40,6 +40,12 @@ th, td{
 
 th{
     background:#1b1b1b;
+    cursor:pointer;
+    transition:0.15s;
+}
+
+th:hover{
+    background:#2a2a2a;
 }
 
 .player{
@@ -104,6 +110,7 @@ async function loadPlayers(){
     const seasonId = season.id;
 
     let rows = [];
+window.rows = rows;
 
     league.teams.forEach(team=>{
 
@@ -146,7 +153,7 @@ passAccuracy: (stats.passesTotal || 0) > 0
     });
 
     // 🔥 řazení
-    rows.sort((a,b)=>{
+    window.rows.sort((a,b)=>{
     if(b.avgRating !== a.avgRating)
         return b.avgRating - a.avgRating;
 
@@ -156,7 +163,7 @@ passAccuracy: (stats.passesTotal || 0) > 0
     return b.assists - a.assists;
 });
 
-    renderTable(rows);
+    renderTable(window.rows);
 }
 
 function renderTable(rows){
@@ -167,19 +174,19 @@ function renderTable(rows){
     <tr>
         <th>#</th>
         <th class="player">Hráč</th>
-        <th>Tým</th>
-        <th>⭐</th>
-        <th>Z</th>
-        <th>Min</th>
-        <th>G</th>
-        <th>A</th>
-        <th>🟨</th>
-        <th>🟥</th>
-        <th>G/90</th>
-        <th>Přihr.</th>
-        <th>Přihr.OK</th>
-        <th>%</th>
-        <th>xG/90</th>
+        <th onclick="sortBy('team')" style="cursor:pointer">Tým</th>
+        <th onclick="sortBy('avgRating')" style="cursor:pointer">⭐</th>
+        <th onclick="sortBy('matches')" style="cursor:pointer">Z</th>
+        <th onclick="sortBy('minutes')" style="cursor:pointer">Min</th>
+        <th onclick="sortBy('goals')" style="cursor:pointer">G</th>
+        <th onclick="sortBy('assists')" style="cursor:pointer">A</th>
+        <th onclick="sortBy('yellow')" style="cursor:pointer">🟨</th>
+        <th onclick="sortBy('red')" style="cursor:pointer">🟥</th>
+        <th onclick="sortBy('goalsPer90')" style="cursor:pointer">G/90</th>
+        <th onclick="sortBy('passes')" style="cursor:pointer">Přihr.</th>
+        <th onclick="sortBy('passesCompleted')" style="cursor:pointer">Přihr.OK</th>
+        <th onclick="sortBy('passAccuracy')" style="cursor:pointer">%</th>
+        <th onclick="sortBy('xgPer90')" style="cursor:pointer">xG/90</th>
     </tr>
 `;
 
@@ -207,6 +214,25 @@ function renderTable(rows){
         </tr>
     `;
 });
+}
+
+window.sortBy = function(field){
+
+    window.rows.sort((a,b)=>{
+
+        const A = a[field];
+        const B = b[field];
+
+        // pokud je text (např tým)
+        if(typeof A === "string" && isNaN(A)){
+            return A.localeCompare(B);
+        }
+
+        // jinak čísla
+        return Number(B) - Number(A);
+    });
+
+    renderTable(window.rows);
 }
 
 loadPlayers();
