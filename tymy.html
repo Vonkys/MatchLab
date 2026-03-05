@@ -623,12 +623,36 @@ async function renderPlayerDetail(){
     }
     const total = player.stats?.total || {};
     const matches = total.matches || 0;
+    const isHockey = sport.name === "Hokej";
 
-    const goalsPerMatch = matches > 0 ? (total.goals / matches).toFixed(2) : 0;
-    const assistsPerMatch = matches > 0 ? (total.assists / matches).toFixed(2) : 0;
-    const yellowPerMatch = matches > 0 ? (total.yellow / matches).toFixed(2) : 0;
-    const redPerMatch = matches > 0 ? (total.red / matches).toFixed(2) : 0;
-    const minutesPerMatch = matches > 0 ? (total.minutes / matches).toFixed(1) : 0;
+const goalsPerMatch = matches > 0 ? (total.goals / matches).toFixed(2) : 0;
+const assistsPerMatch = matches > 0 ? (total.assists / matches).toFixed(2) : 0;
+const yellowPerMatch = matches > 0 ? (total.yellow / matches).toFixed(2) : 0;
+const redPerMatch = matches > 0 ? (total.red / matches).toFixed(2) : 0;
+
+let minutesPerMatch;
+    
+
+if(matches === 0){
+    minutesPerMatch = isHockey ? "0:00" : 0;
+}
+else if(isHockey){
+
+    // hokej – sekundy → MM:SS
+    let avgSeconds = Math.floor(total.minutes / matches);
+
+    let min = Math.floor(avgSeconds / 60);
+    let sec = avgSeconds % 60;
+
+    minutesPerMatch = min + ":" + String(sec).padStart(2,"0");
+
+}else{
+
+    // fotbal – normální minuty
+    minutesPerMatch = (total.minutes / matches).toFixed(1);
+
+}
+    
     const app=document.getElementById("app");
 
     app.innerHTML=`
@@ -660,15 +684,20 @@ async function renderPlayerDetail(){
 
 <div style="line-height:1.8">
 
-⭐ Průměr rating: ${(player.stats?.total?.avgRating || 0).toFixed(2)} <br>
+${!isHockey ? `⭐ Průměr rating: ${(player.stats?.total?.avgRating || 0).toFixed(2)} <br>` : ``}
 
 Zápasy: ${player.stats?.total?.matches || 0} <br>
-Minuty: ${player.stats?.total?.minutes || 0} <br>
-
+${isHockey ? 
+`Čas na ledě: ${Math.floor((player.stats?.total?.minutes||0)/60)}:${String((player.stats?.total?.minutes||0)%60).padStart(2,"0")} <br>`
+:
+`Minuty: ${player.stats?.total?.minutes || 0} <br>`
+}
 <hr style="opacity:0.2; margin:10px 0;">
 
 ⚽ Góly: ${player.stats?.total?.goals || 0} <br>
 🎯 Asistence: ${player.stats?.total?.assists || 0} <br>
+
+${!isHockey ? `
 
 <hr style="opacity:0.2; margin:10px 0;">
 
@@ -677,6 +706,8 @@ Minuty: ${player.stats?.total?.minutes || 0} <br>
 
 🟥 Červené: ${total.red || 0} 
 ( ${redPerMatch} / zápas ) <br>
+
+` : ``}
 
 <hr style="opacity:0.2; margin:10px 0;">
 
