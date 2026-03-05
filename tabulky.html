@@ -177,26 +177,98 @@ if(!league){
 
         teamMatches = teamMatches.slice(-5);
 
-        let form = teamMatches.map(m => {
+let winsOT = 0;
+let lossesOT = 0;
+
+teamMatches.forEach(m=>{
+
+let isHome = m.homeTeam === team.id;
+
+if(isHome){
+
+if(m.homeScore > m.awayScore && (m.overtime || m.shootout)) winsOT++;
+if(m.homeScore < m.awayScore && (m.overtime || m.shootout)) lossesOT++;
+
+}else{
+
+if(m.awayScore > m.homeScore && (m.overtime || m.shootout)) winsOT++;
+if(m.awayScore < m.homeScore && (m.overtime || m.shootout)) lossesOT++;
+
+}
+
+});
+
+let form = teamMatches.map(m => {
+      let winsOT = 0;
+let lossesOT = 0;
+
+teamMatches.forEach(m=>{
+
+let isHome = m.homeTeam === team.id;
+
+if(isHome){
+
+if(m.homeScore > m.awayScore && (m.overtime || m.shootout)) winsOT++;
+if(m.homeScore < m.awayScore && (m.overtime || m.shootout)) lossesOT++;
+
+}else{
+
+if(m.awayScore > m.homeScore && (m.overtime || m.shootout)) winsOT++;
+if(m.awayScore < m.homeScore && (m.overtime || m.shootout)) lossesOT++;
+
+}
+
+});
 
             if(m.homeTeam === team.id){
-                if(m.homeScore > m.awayScore) return "W";
-                if(m.homeScore < m.awayScore) return "L";
-                return "D";
-            }else{
-                if(m.awayScore > m.homeScore) return "W";
-                if(m.awayScore < m.homeScore) return "L";
-                return "D";
-            }
 
-        });
+    if(m.homeScore > m.awayScore){
 
+        if(m.overtime || m.shootout) return "OTW";
+        return "W";
+
+    }
+
+    if(m.homeScore < m.awayScore){
+
+        if(m.overtime || m.shootout) return "OTL";
+        return "L";
+
+    }
+
+}else{
+
+    if(m.awayScore > m.homeScore){
+
+        if(m.overtime || m.shootout) return "OTW";
+        return "W";
+
+    }
+
+    if(m.awayScore < m.homeScore){
+
+        if(m.overtime || m.shootout) return "OTL";
+        return "L";
+
+    }
+
+}
+
+return "D";
+
+});
         rows.push({
-            name:team.name,
-            played:stats.played,
-            wins:stats.wins,
-            draws:stats.draws,
-            losses:stats.losses,
+    name:team.name,
+    played:stats.played,
+
+    // fotbal
+    draws:stats.draws || 0,
+
+    // hokej
+    wins:stats.wins - winsOT,
+    winsOT:winsOT,
+    lossesOT:lossesOT,
+    losses:stats.losses - lossesOT,
             goalsFor:stats.goalsFor,
             goalsAgainst:stats.goalsAgainst,
             goalDiff:stats.goalsFor - stats.goalsAgainst,
@@ -213,51 +285,104 @@ if(!league){
         return b.goalsFor - a.goalsFor;
     });
 
-    renderTable(rows);
+    renderTable(rows, data.sports.find(s => s.leagues?.some(l => l.id === leagueId)).name);
 }
 
-function renderTable(rows){
+function renderTable(rows, sport){
 
     const table = document.getElementById("table");
 
-    table.innerHTML = `
-        <tr>
-            <th>#</th>
-            <th class="team">Tým</th>
-            <th>Z</th>
-            <th>V</th>
-            <th>R</th>
-            <th>P</th>
-            <th>G</th>
-            <th>B</th>
-            <th>FORMA</th>
-        </tr>
-    `;
+    if(sport === "Hokej"){
 
-    rows.forEach((r,i)=>{
+table.innerHTML = `
+<tr>
+<th>#</th>
+<th class="team">Tým</th>
+<th>Z</th>
+<th>V</th>
+<th>V/PP</th>
+<th>P/PP</th>
+<th>P</th>
+<th>G</th>
+<th>B</th>
 
-        table.innerHTML += `
-            <tr>
-                <td>${i+1}</td>
-                <td class="team">${r.name}</td>
-                <td>${r.played}</td>
-                <td>${r.wins}</td>
-                <td>${r.draws}</td>
-                <td>${r.losses}</td>
-                <td>${r.goalsFor}:${r.goalsAgainst}</td>
-                <td><b>${r.points}</b></td>
-                <td>
-                    ${r.form.map(f=>{
-                        if(f==="W") return "🟢";
-                        if(f==="D") return "🟡";
-                        return "🔴";
-                    }).join(" ")}
-                </td>
-            </tr>
-        `;
-    });
+<th>FORMA</th>
+</tr>
+`;
+
+}else{
+
+table.innerHTML = `
+<tr>
+<th>#</th>
+<th class="team">Tým</th>
+<th>Z</th>
+<th>V</th>
+<th>R</th>
+<th>P</th>
+<th>G</th>
+<th>B</th>
+<th>FORMA</th>
+</tr>
+`;
+
 }
 
+    
+
+     rows.forEach((r,i)=>{
+
+if(sport === "Hokej"){
+
+table.innerHTML += `
+<tr>
+<td>${i+1}</td>
+<td class="team">${r.name}</td>
+<td>${r.played}</td>
+<td>${r.wins}</td>
+<td>${r.winsOT}</td>
+<td>${r.lossesOT}</td>
+<td>${r.losses}</td>
+<td>${r.goalsFor}:${r.goalsAgainst}</td>
+<td><b>${r.points}</b></td>
+<td>
+${r.form.map(f=>{
+if(f==="W") return "🟢";
+if(f==="OTW") return "🔵";
+if(f==="OTL") return "🟡";
+if(f==="L") return "🔴";
+return "⚪";
+}).join(" ")}
+</td>
+</tr>
+`;
+
+}else{
+
+table.innerHTML += `
+<tr>
+<td>${i+1}</td>
+<td class="team">${r.name}</td>
+<td>${r.played}</td>
+<td>${r.wins}</td>
+<td>${r.draws}</td>
+<td>${r.losses}</td>
+<td>${r.goalsFor}:${r.goalsAgainst}</td>
+<td><b>${r.points}</b></td>
+<td>
+${r.form.map(f=>{
+if(f==="W") return "🟢";
+if(f==="D") return "🟡";
+return "🔴";
+}).join(" ")}
+</td>
+</tr>
+`;
+
+}
+
+});
+}
 window.goPlayers = function(){
     const leagueId = getLeagueId();
     window.location.href = "hraci.html?league=" + leagueId;
