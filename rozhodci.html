@@ -50,7 +50,7 @@ th{
 <body>
 
 <div class="topbar">
-<span onclick="window.location.href='tabulky.html'" style="cursor:pointer">
+<span onclick="goBack()" style="cursor:pointer">
 ← Zpět na tabulku
 </span>
 </div>
@@ -75,6 +75,15 @@ const firebaseConfig = {
   appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
 };
 
+function getLeagueId(){
+    return new URLSearchParams(window.location.search).get("league");
+}
+
+window.goBack = function(){
+    const leagueId = getLeagueId();
+    window.location.href = "tabulky.html?league=" + leagueId;
+}
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -83,8 +92,22 @@ async function loadReferees(){
     const snap = await getDoc(doc(db,"appData","main"));
     const data = snap.data();
 
-    const sport = data.sports[0];
-    const league = sport.leagues[0];
+    const leagueId = getLeagueId();
+
+let league = null;
+
+data.sports.forEach(s=>{
+    s.leagues?.forEach(l=>{
+        if(l.id === leagueId){
+            league = l;
+        }
+    });
+});
+
+if(!league){
+    document.getElementById("leagueTitle").textContent = "Liga nenalezena";
+    return;
+}
 
     document.getElementById("leagueTitle").textContent =
         `Statistiky rozhodčích – ${league.name}`;
@@ -154,7 +177,7 @@ async function loadReferees(){
     });
 
     // řazení podle průměru žlutých
-    rows.sort((a,b)=> b.yellowAvg - a.yellowAvg);
+    rows.sort((a,b)=> Number(b.yellowAvg) - Number(a.yellowAvg));
 
     renderTable(rows);
 }
@@ -194,6 +217,5 @@ function renderTable(rows){
 loadReferees();
 
 </script>
-
 </body>
 </html>
