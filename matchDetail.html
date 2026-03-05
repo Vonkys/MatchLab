@@ -93,25 +93,27 @@ function getMatchId(){
 
 function findMatch(data, matchId){
 
-    let match=null;
-    let league=null;
+let match=null;
+let league=null;
+let sport=null;
 
-    data.sports.forEach(s=>{
-        s.leagues?.forEach(l=>{
-            l.seasons?.forEach(season=>{
-                season.rounds?.forEach(round=>{
-                    round.matches?.forEach(m=>{
-                        if(m.id===matchId){
-                            match=m;
-                            league=l;
-                        }
-                    });
+data.sports.forEach(s=>{
+    s.leagues?.forEach(l=>{
+        l.seasons?.forEach(season=>{
+            season.rounds?.forEach(round=>{
+                round.matches?.forEach(m=>{
+                    if(m.id===matchId){
+                        match=m;
+                        league=l;
+                        sport=s;
+                    }
                 });
             });
         });
     });
+});
 
-    return {match,league};
+   return {match,league,sport};
 }
 
 function calculateScore(match){
@@ -140,9 +142,15 @@ function calculateScore(match){
         awayOwnGoals += stats.ownGoals || 0;
     });
 
-    // vlastní gól domácích = gól pro hosty
     match.homeScore = homeGoals + awayOwnGoals;
     match.awayScore = awayGoals + homeOwnGoals;
+
+    // ===== HOKEJ NÁJEZDY =====
+    if(match.shootout){
+        if(match.homeScore === match.awayScore){
+            match.homeScore += 1;
+        }
+    }
 
     match.status = "played";
 }
@@ -194,20 +202,26 @@ function rebuildPlayerStats(data){
 
                                 // ===== INIT SEASON =====
                                 if(!player.stats.seasons[seasonId]){
-                                    player.stats.seasons[seasonId] = {
-                                    matches:0,
-                                    minutes:0,
-                                    goals:0,
-                                    ownGoals:0,
-                                    assists:0,
-                                    yellow:0,
-                                    red:0,
-                                    passesMade:0,
-                                    passesTotal:0,
-                                    xg:0
-                                 };
-                                }
+                                   player.stats.seasons[seasonId] = {
+                                   matches:0,
+                                   minutes:0,
+                                   goals:0,
+                                   ownGoals:0,
+                                   assists:0,
+                                   yellow:0,
+                                   red:0,
+                                   passesMade:0,
+                                   passesTotal:0,
+                                   xg:0,
 
+                                  // hokej
+                                  shots:0,
+                                  plusMinus:0,
+                                  penaltyMinutes:0,
+                                  faceoffsTotal:0,
+                                  faceoffsWon:0
+                                  };
+                                }
                                 // ===== TOTAL =====
                                 player.stats.total.matches += 1;
                                 player.stats.total.minutes += stats.minutes || 0;
@@ -233,6 +247,11 @@ function rebuildPlayerStats(data){
                                 player.stats.seasons[seasonId].passesMade += stats.passesMade || 0;
                                 player.stats.seasons[seasonId].passesTotal += stats.passesTotal || 0;
                                 player.stats.seasons[seasonId].xg += stats.xg || 0;
+                                player.stats.seasons[seasonId].shots += stats.shots || 0;
+                                player.stats.seasons[seasonId].plusMinus += stats.plusMinus || 0;
+                                player.stats.seasons[seasonId].faceoffsTotal += stats.faceoffsTotal || 0;
+                                player.stats.seasons[seasonId].faceoffsWon += stats.faceoffsWon || 0;
+                                player.stats.seasons[seasonId].penaltyMinutes += stats.penaltyMinutes || 0;
                             });
                         });
 
@@ -268,105 +287,159 @@ function rebuildPlayerStats(data){
 
 function rebuildTeamStats(data){
 
-    data.sports.forEach(sport=>{
-        sport.leagues?.forEach(league=>{
+data.sports.forEach(sport=>{
+sport.leagues?.forEach(league=>{
 
-            league.teams?.forEach(team=>{
-    team.stats = {
-        seasons:{}
-    };
+// reset statistik týmů
+league.teams?.forEach(team=>{
+team.stats = { seasons:{} };
 });
-            league.seasons?.forEach(season=>{
-                const seasonId = season.id;
 
+league.seasons?.forEach(season=>{
+const seasonId = season.id;
+
+// init sezony
 league.teams.forEach(team=>{
-    team.stats.seasons[seasonId] = {
-        played:0,
-        wins:0,
-        draws:0,
-        losses:0,
-        goalsFor:0,
-        goalsAgainst:0,
-        xGFor:0,
-        xGAgainst:0,
-        points:0
-    };
+team.stats.seasons[seasonId] = {
+played:0,
+wins:0,
+draws:0,
+losses:0,
+goalsFor:0,
+goalsAgainst:0,
+xGFor:0,
+xGAgainst:0,
+points:0
+};
 });
-                
-                season.rounds?.forEach(round=>{
-                    round.matches?.forEach(match=>{
 
-                        if(match.status !== "played") return;
+season.rounds?.forEach(round=>{
+round.matches?.forEach(match=>{
 
-                        const homeTeam = league.teams.find(t=>t.id===match.homeTeam);
-                        const awayTeam = league.teams.find(t=>t.id===match.awayTeam);
+if(match.status !== "played") return;
 
-                        if(!homeTeam || !awayTeam) return;
-                        let homeXG = 0;
-                        let awayXG = 0;
+const homeTeam = league.teams.find(t=>t.id===match.homeTeam);
+const awayTeam = league.teams.find(t=>t.id===match.awayTeam);
 
-                        if(match.playerStats){
+if(!homeTeam || !awayTeam) return;
 
-                        (match.homeLineup || []).forEach(pid=>{
-                        homeXG += match.playerStats[pid]?.xg || 0;
-                        });
+let homeXG = 0;
+let awayXG = 0;
 
-                        (match.awayLineup || []).forEach(pid=>{
-                        awayXG += match.playerStats[pid]?.xg || 0;
-                        });
+if(match.playerStats){
+
+(match.homeLineup || []).forEach(pid=>{
+homeXG += match.playerStats[pid]?.xg || 0;
+});
+
+(match.awayLineup || []).forEach(pid=>{
+awayXG += match.playerStats[pid]?.xg || 0;
+});
 
 }
-                        const homeStats = homeTeam.stats.seasons[seasonId];
+
+const homeStats = homeTeam.stats.seasons[seasonId];
 const awayStats = awayTeam.stats.seasons[seasonId];
 
+// zápasy
 homeStats.played++;
 awayStats.played++;
 
+// góly
 homeStats.goalsFor += match.homeScore || 0;
 homeStats.goalsAgainst += match.awayScore || 0;
 
 awayStats.goalsFor += match.awayScore || 0;
 awayStats.goalsAgainst += match.homeScore || 0;
 
+// xG
 homeStats.xGFor += homeXG;
 homeStats.xGAgainst += awayXG;
 
 awayStats.xGFor += awayXG;
 awayStats.xGAgainst += homeXG;
-                        
+
+
+// ===== FOTBAL =====
+if(sport.name === "Fotbal"){
+
 if(match.homeScore > match.awayScore){
 
-    homeStats.wins++;
-    homeStats.points += 3;
-
-    awayStats.losses++;
+homeStats.wins++;
+homeStats.points += 3;
+awayStats.losses++;
 
 }
 else if(match.homeScore < match.awayScore){
 
-    awayStats.wins++;
-    awayStats.points += 3;
-
-    homeStats.losses++;
+awayStats.wins++;
+awayStats.points += 3;
+homeStats.losses++;
 
 }
 else{
 
-    homeStats.draws++;
-    awayStats.draws++;
+homeStats.draws++;
+awayStats.draws++;
 
-    homeStats.points += 1;
-    awayStats.points += 1;
+homeStats.points += 1;
+awayStats.points += 1;
 
 }
-                    });
-                });
-            });
 
-        });
-    });
 }
 
+
+// ===== HOKEJ =====
+else if(sport.name === "Hokej"){
+
+// NHL má 2 body za výhru
+let winPoints = 3;
+
+// pokud je liga NHL
+if(league.name === "NHL"){
+winPoints = 2;
+}
+
+if(match.homeScore > match.awayScore){
+
+homeStats.wins++;
+
+if(match.overtime || match.shootout){
+homeStats.points += 2;
+awayStats.points += 1;
+}else{
+homeStats.points += winPoints;
+}
+
+awayStats.losses++;
+
+}
+else if(match.homeScore < match.awayScore){
+
+awayStats.wins++;
+
+if(match.overtime || match.shootout){
+awayStats.points += 2;
+homeStats.points += 1;
+}else{
+awayStats.points += winPoints;
+}
+
+homeStats.losses++;
+
+}
+
+}
+
+});
+});
+
+});
+
+});
+});
+}
 async function render(){
 
     const data=await getData();
@@ -380,23 +453,48 @@ async function render(){
 
     const match=result.match;
     const league=result.league;
-
+    const sport=result.sport;
+    
     const homeTeam=league.teams.find(t=>t.id===match.homeTeam);
     const awayTeam=league.teams.find(t=>t.id===match.awayTeam);
 
-    const app=document.getElementById("app");
+   const app=document.getElementById("app");
 
-    app.innerHTML=`
-        <h2>
+let resultText = "";
+
+if(match.shootout){
+    resultText = " SO";
+}
+else if(match.overtime){
+    resultText = " OT";
+}
+
+app.innerHTML=`
+<h2>
 ${homeTeam.name}
 ${match.homeScore ?? "-"}
 :
-${match.awayScore ?? "-"}
+${match.awayScore ?? "-"}${resultText}
 ${awayTeam.name}
 </h2>
-
 <label>Rozhodčí</label>
 <select id="refereeSelect"></select>
+
+<div style="margin-top:10px">
+
+<label>
+<input type="checkbox" id="overtime">
+Prodloužení
+</label>
+
+<br>
+
+<label>
+<input type="checkbox" id="shootout">
+Nájezdy
+</label>
+
+</div>
 
 <h3>Domácí sestava</h3>
         <div id="homePlayers"></div>
@@ -407,8 +505,8 @@ ${awayTeam.name}
         <button id="saveBtn">Uložit změny</button>
     `;
 
-    renderPlayers(homeTeam.players,"homePlayers","homeLineup",match);
-    renderPlayers(awayTeam.players,"awayPlayers","awayLineup",match);
+    renderPlayers(homeTeam.players,"homePlayers","homeLineup",match,sport);
+    renderPlayers(awayTeam.players,"awayPlayers","awayLineup",match,sport);
     const select = document.getElementById("refereeSelect");
 
 if(!league.referees) league.referees = [];
@@ -426,10 +524,14 @@ league.referees.forEach(r=>{
 if(match.refereeId){
     select.value = match.refereeId;
 }
+  document.getElementById("overtime").checked = match.overtime || false;
+  document.getElementById("shootout").checked = match.shootout || false;
   document.getElementById("saveBtn").onclick = async ()=>{
 
     match.refereeId = document.getElementById("refereeSelect").value || null;
-
+    match.overtime = document.getElementById("overtime").checked;
+    match.shootout = document.getElementById("shootout").checked;
+    
     if(!match.playerStats) match.playerStats={};
 
     document
@@ -441,30 +543,75 @@ if(match.refereeId){
 
         const playerId = row.dataset.playerId;
 
-        const inputs = row.querySelectorAll("input[type=number]");
+       const inputs = row.querySelectorAll("input:not([type=checkbox])");
 
-       const keys = [
-    "minutes",
-    "goals",
-    "ownGoals",
-    "assists",
-    "yellow",
-    "red",
-    "rating",
-    "shots",
-    "xg",
-    "passesMade",
-    "passesTotal"
+      let keys;
+
+if(sport.name === "Hokej"){
+
+keys=[
+"minutes",
+"goals",
+"assists",
+"plusMinus",
+"shots",
+"penaltyMinutes",
+"faceoffsTotal",
+"faceoffsWon"
 ];
+
+}else{
+
+keys=[
+"minutes",
+"goals",
+"ownGoals",
+"assists",
+"yellow",
+"red",
+"rating",
+"shots",
+"xg",
+"passesMade",
+"passesTotal"
+];
+
+}
 
         const stats = {};
 
         inputs.forEach((input,i)=>{
-            if(input.value !== ""){
-                const raw = input.value.replace(",", ".");
-stats[keys[i]] = Number(raw);
-            }
-        });
+
+if(input.value !== ""){
+
+let raw = input.value.trim();
+
+if(keys[i] === "minutes" && sport.name === "Hokej"){
+
+if(raw.includes(":")){
+
+let parts = raw.split(":");
+let min = Number(parts[0]) || 0;
+let sec = Number(parts[1]) || 0;
+
+stats[keys[i]] = (min * 60) + sec;
+
+}else{
+
+stats[keys[i]] = Number(raw) || 0;
+
+}
+
+}else{
+
+raw = raw.replace(",", ".");
+stats[keys[i]] = Number(raw) || 0;
+
+}
+
+}
+
+});
 
         if(Object.keys(stats).length > 0){
             match.playerStats[playerId] = stats;
@@ -484,7 +631,7 @@ window.location.href="zapasy.html";
 };
 }
 
-function renderPlayers(players,containerId,lineupKey,match){
+function renderPlayers(players,containerId,lineupKey,match,sport){
 
     const container=document.getElementById(containerId);
     container.innerHTML="";
@@ -532,7 +679,24 @@ function renderPlayers(players,containerId,lineupKey,match){
         statsDiv.style.gap="6px";
         statsDiv.style.marginTop="8px";
 
-        const fields=[
+       let fields;
+
+if(sport.name === "Hokej"){
+
+fields=[
+    {key:"minutes",ph:"MM:SS"},
+    {key:"goals",ph:"G"},
+    {key:"assists",ph:"A"},
+    {key:"plusMinus",ph:"+/-"},
+    {key:"shots",ph:"Stř"},
+    {key:"penaltyMinutes",ph:"TM"},   // 🔥 trestné minuty
+    {key:"faceoffsTotal",ph:"Buly"},
+    {key:"faceoffsWon",ph:"Buly✓"}
+];
+
+}else{
+
+fields=[
     {key:"minutes",ph:"Min"},
     {key:"goals",ph:"G"},
     {key:"ownGoals",ph:"OG"},
@@ -546,11 +710,16 @@ function renderPlayers(players,containerId,lineupKey,match){
     {key:"passesTotal",ph:"PΣ"}
 ];
 
+}
         const inputs={};
 
         fields.forEach(f=>{
             const input=document.createElement("input");
-            input.type="number";
+            if(sport.name === "Hokej" && f.key === "minutes"){
+    input.type="text";
+}else{
+    input.type="number";
+}
             if(f.step) input.step=f.step;
             input.placeholder=f.ph;
             input.style.width="60px";
@@ -563,10 +732,27 @@ function renderPlayers(players,containerId,lineupKey,match){
      // ===== NAČTENÍ ULOŽENÝCH STATISTIK =====
 if(match.playerStats?.[p.id]){
 
-    Object.keys(inputs).forEach(key=>{
-        inputs[key].value =
-            match.playerStats[p.id][key] ?? "";
-    });
+   Object.keys(inputs).forEach(key=>{
+
+let val = match.playerStats[p.id][key];
+
+if(val === undefined) return;
+
+// ===== HOKEJ ČAS =====
+if(key === "minutes" && sport.name === "Hokej"){
+
+let min = Math.floor(val / 60);
+let sec = val % 60;
+
+inputs[key].value = min + ":" + String(sec).padStart(2,"0");
+
+}else{
+
+inputs[key].value = val;
+
+}
+
+});
 
     // zobraz statistiky pokud už hráč byl vybrán
     statsDiv.style.display = "flex";
@@ -602,8 +788,8 @@ if(match.playerStats?.[p.id]){
 
         container.appendChild(row);
     });
-}
 
+}
 await render();
 
 </script>
