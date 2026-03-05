@@ -117,11 +117,13 @@ async function loadPlayers(){
     const leagueId = getLeagueId();
 
 let league = null;
+let sportName = "";
 
 data.sports.forEach(s=>{
     s.leagues?.forEach(l=>{
         if(l.id === leagueId){
             league = l;
+            sportName = s.name;
         }
     });
 });
@@ -155,7 +157,30 @@ window.rows = rows;
 
             if(stats.matches === 0) return;
 
-   rows.push({
+   if(sportName === "Hokej"){
+
+rows.push({
+    name:player.name,
+    team:team.name,
+    position:player.position || "ATT",
+    matches:stats.matches,
+    minutes:stats.minutes || 0,
+    goals:stats.goals || 0,
+    assists:stats.assists || 0,
+    points:(stats.goals || 0) + (stats.assists || 0),
+    plusMinus:stats.plusMinus || 0,
+    shots:stats.shots || 0,
+    penaltyMinutes:stats.penaltyMinutes || 0,
+    faceoffsTotal:stats.faceoffsTotal || 0,
+    faceoffsWon:stats.faceoffsWon || 0,
+    faceoffPct:(stats.faceoffsTotal || 0) > 0
+        ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
+        : 0
+});
+
+}else{
+
+rows.push({
     name:player.name,
     team:team.name,
     position:player.position || "ATT",
@@ -167,36 +192,63 @@ window.rows = rows;
     red:stats.red || 0,
 
     passes: stats.passesTotal || 0,
-passesCompleted: stats.passesMade || 0,
-passAccuracy: (stats.passesTotal || 0) > 0
-    ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
-    : 0,
-    
+    passesCompleted: stats.passesMade || 0,
+    passAccuracy: (stats.passesTotal || 0) > 0
+        ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
+        : 0,
+
     xgPer90: stats.minutes > 0
-    ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
-    : 0,
+        ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
+        : 0,
 
     avgRating: player.stats?.total?.avgRating || 0,
 
     goalsPer90: stats.minutes > 0
-    ? ((stats.goals / stats.minutes) * 90).toFixed(2)
-    : 0
+        ? ((stats.goals / stats.minutes) * 90).toFixed(2)
+        : 0
 });
+
+}
 
         });
 
     });
 
     // 🔥 řazení
+    if(rows[0] && rows[0].points !== undefined){
+
+    // HOKEJ – řazení podle bodů
     window.rows.sort((a,b)=>{
-    if(b.avgRating !== a.avgRating)
-        return b.avgRating - a.avgRating;
 
-    if(b.goals !== a.goals)
-        return b.goals - a.goals;
+        if(b.points !== a.points)
+    return b.points - a.points;
 
-    return b.assists - a.assists;
-});
+if(a.matches !== b.matches)
+    return a.matches - b.matches;
+
+        if(b.goals !== a.goals)
+            return b.goals - a.goals;
+
+        return b.assists - a.assists;
+
+    });
+
+}else{
+
+    // FOTBAL – necháme původní
+    window.rows.sort((a,b)=>{
+
+        if(b.avgRating !== a.avgRating)
+            return b.avgRating - a.avgRating;
+
+        if(b.goals !== a.goals)
+            return b.goals - a.goals;
+
+        return b.assists - a.assists;
+
+    });
+
+}
 
     renderTable(window.rows);
 }
@@ -213,44 +265,99 @@ function renderTable(rows){
 
     const table = document.getElementById("table");
 
-    table.innerHTML = `
-    <tr>
-        <th>#</th>
-        <th class="player">Hráč</th>
-        <th onclick="sortBy('team')" style="cursor:pointer">Tým</th>
-        <th onclick="sortBy('avgRating')" style="cursor:pointer">⭐</th>
-        <th onclick="sortBy('matches')" style="cursor:pointer">Z</th>
-        <th onclick="sortBy('minutes')" style="cursor:pointer">Min</th>
-        <th onclick="sortBy('goals')" style="cursor:pointer">G</th>
-        <th onclick="sortBy('assists')" style="cursor:pointer">A</th>
-        <th onclick="sortBy('yellow')" style="cursor:pointer">🟨</th>
-        <th onclick="sortBy('red')" style="cursor:pointer">🟥</th>
-        <th onclick="sortBy('goalsPer90')" style="cursor:pointer">G/90</th>
-        <th onclick="sortBy('passes')" style="cursor:pointer">Přihr.</th>
-        <th onclick="sortBy('passesCompleted')" style="cursor:pointer">Přihr.OK</th>
-        <th onclick="sortBy('passAccuracy')" style="cursor:pointer">%</th>
-        <th onclick="sortBy('xgPer90')" style="cursor:pointer">xG/90</th>
-    </tr>
+   if(rows[0] && rows[0].points !== undefined){
+
+table.innerHTML = `
+<tr>
+<th>#</th>
+<th class="player">Hráč</th>
+<th onclick="sortBy('team')">Tým</th>
+<th onclick="sortBy('matches')">Z</th>
+<th onclick="sortBy('minutes')">TOI</th>
+<th onclick="sortBy('goals')">G</th>
+<th onclick="sortBy('assists')">A</th>
+<th onclick="sortBy('points')">B</th>
+<th onclick="sortBy('plusMinus')">+/-</th>
+<th onclick="sortBy('shots')">Stř</th>
+<th onclick="sortBy('penaltyMinutes')">TM</th>
+<th onclick="sortBy('faceoffsTotal')">Buly</th>
+<th onclick="sortBy('faceoffsWon')">Buly OK</th>
+<th onclick="sortBy('faceoffPct')">%</th>
+</tr>
 `;
 
+}else{
+
+table.innerHTML = `
+<tr>
+<th>#</th>
+<th class="player">Hráč</th>
+<th onclick="sortBy('team')">Tým</th>
+<th onclick="sortBy('avgRating')">⭐</th>
+<th onclick="sortBy('matches')">Z</th>
+<th onclick="sortBy('minutes')">Min</th>
+<th onclick="sortBy('goals')">G</th>
+<th onclick="sortBy('assists')">A</th>
+<th onclick="sortBy('yellow')">🟨</th>
+<th onclick="sortBy('red')">🟥</th>
+<th onclick="sortBy('goalsPer90')">G/90</th>
+<th onclick="sortBy('passes')">Přihr.</th>
+<th onclick="sortBy('passesCompleted')">Přihr.OK</th>
+<th onclick="sortBy('passAccuracy')">%</th>
+<th onclick="sortBy('xgPer90')">xG/90</th>
+</tr>
+`;
+
+}
    
 
-        rows.forEach((r,i)=>{
+       rows.forEach((r,i)=>{
 
-    table.innerHTML += `
+if(r.points !== undefined){
+
+table.innerHTML += `
+<tr>
+<td>${i+1}</td>
+
+<td class="player">
+<span class="position"
+style="background:${positionColors[r.position]}">
+${r.position}
+</span>
+${r.name}
+</td>
+
+<td class="team">${r.team}</td>
+<td>${r.matches}</td>
+<td>${
+Math.floor(r.minutes/60) + ":" + String(r.minutes%60).padStart(2,"0")
+}</td>
+<td><b>${r.goals}</b></td>
+<td>${r.assists}</td>
+<td><b>${r.points}</b></td>
+<td>${r.plusMinus}</td>
+<td>${r.shots}</td>
+<td>${r.penaltyMinutes}</td>
+<td>${r.faceoffsTotal}</td>
+<td>${r.faceoffsWon}</td>
+<td>${r.faceoffPct}%</td>
+
+</tr>
+`;
+
+}else{
+
+table.innerHTML += `
 <tr>
 
 <td>${i+1}</td>
 
 <td class="player">
-
 <span class="position"
 style="background:${positionColors[r.position]}">
 ${r.position}
 </span>
-
 ${r.name}
-
 </td>
 
 <td class="team">${r.team}</td>
@@ -269,9 +376,11 @@ ${r.name}
 
 </tr>
 `;
-});
+
 }
 
+});
+}
 window.sortBy = function(field){
 
     window.rows.sort((a,b)=>{
