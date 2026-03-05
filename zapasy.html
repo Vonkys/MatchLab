@@ -400,10 +400,15 @@ if(!roundObj.date){
         homeTeam:home,
         awayTeam:away,
         date,
+
         homeScore:null,
         awayScore:null,
+
+        overtime:false,
+        shootout:false,
+
         status:"scheduled"
-    });
+});
 
     await saveData(data);
     closeModal();
@@ -520,12 +525,23 @@ data.sports.forEach(sport=>{
                         window.location.href="matchDetail.html?id="+match.id;
                     };
 
-                    info.innerHTML=`
+let resultText = "";
+
+if(sport.name === "Hokej"){
+    if(match.shootout){
+        resultText = " SO";
+    }
+    else if(match.overtime){
+        resultText = " OT";
+    }
+}
+
+info.innerHTML=`
 <strong>
 ${home?.name ?? "?"}
 ${match.homeScore ?? "-"}
 :
-${match.awayScore ?? "-"}
+${match.awayScore ?? "-"}${resultText}
 ${away?.name ?? "?"}
 </strong>
 <div style="font-size:13px;color:#aaa">${match.date}</div>
