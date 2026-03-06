@@ -495,17 +495,25 @@ return getYear(b) - getYear(a);
 
             const seasonDiv=document.createElement("div");
             seasonDiv.className="card";
-            seasonDiv.innerText="▶ "+season.name;
+            seasonDiv.innerHTML = `
+<span style="flex:1;cursor:pointer;">▶ ${season.name}</span>
+<span style="color:#ff6b6b;cursor:pointer;">✖</span>
+`;
+seasonDiv.style.display="flex";
+seasonDiv.style.justifyContent="space-between";
+seasonDiv.style.alignItems="center";
+seasonDiv.children[0].onclick=()=>{
+    roundWrap.style.display =
+        roundWrap.style.display==="none"?"block":"none";
+};
 
+seasonDiv.children[1].onclick=async (e)=>{
+    e.stopPropagation();
+    await deleteSeason(league.id, season.id);
+};
             const roundWrap=document.createElement("div");
             roundWrap.style.display="none";
             roundWrap.style.marginLeft="15px";
-
-            seasonDiv.onclick=()=>{
-                roundWrap.style.display =
-                    roundWrap.style.display==="none"?"block":"none";
-            };
-
             seasonWrap.appendChild(seasonDiv);
             seasonWrap.appendChild(roundWrap);
 
@@ -608,6 +616,27 @@ data.sports.forEach(sport=>{
 await saveData(data);
 render();
 }
+async function deleteSeason(leagueId, seasonId){
+
+if(!confirm("Smazat celou sezónu?")) return;
+
+const data = await getData();
+
+data.sports.forEach(sport=>{
+    sport.leagues?.forEach(league=>{
+
+        if(league.id !== leagueId) return;
+
+        league.seasons =
+            league.seasons.filter(s=>s.id !== seasonId);
+
+    });
+});
+
+await saveData(data);
+render();
+}
+
 render()
 
 </script>
