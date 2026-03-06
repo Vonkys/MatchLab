@@ -342,7 +342,10 @@ async function renderReferees(){
 
     const list=document.getElementById("list");
 
-    league.referees.forEach(r=>{
+   (league.referees || [])
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(r=>{
 
         const div=document.createElement("div");
         div.className="card";
@@ -422,7 +425,10 @@ async function renderTeams(){
 
     const list=document.getElementById("list");
 
-    league.teams.forEach(t=>{
+    league.teams
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(t=>{
         const div=document.createElement("div");
         div.className="card";
 
