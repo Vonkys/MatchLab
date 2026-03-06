@@ -107,6 +107,21 @@ const firebaseConfig = {
   appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
 };
 
+const DELETE_PASSWORD = "1387";
+
+function checkDeletePassword(){
+
+const pass = prompt("Zadej heslo pro mazání:");
+
+if(pass !== DELETE_PASSWORD){
+    alert("Špatné heslo");
+    return false;
+}
+
+return true;
+
+}
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -126,7 +141,6 @@ async function getData(){
 async function saveData(data){
     await setDoc(doc(db,"appData","main"), data);
 }
-
 /* ================= HELPERS ================= */
 
 function generateId(){
@@ -214,6 +228,9 @@ async function addSport(){
 }
 
 async function deleteSport(id){
+
+    if(!checkDeletePassword()) return;
+
     if(!confirm("Smazat sport?")) return;
 
     const data=await getData();
@@ -391,6 +408,8 @@ async function addLeague(){
 
 async function deleteLeague(id){
 
+    if(!checkDeletePassword()) return;
+
     if(!confirm("Smazat ligu?")) return;
 
     const data=await getData();
@@ -481,7 +500,7 @@ async function renderPlayers(){
         ATT: []
     };
 
-    team.players.forEach(p=>{
+    (team.players || []).forEach(p=>{
         const pos = p.position || "ATT";
         if(!groups[pos]) groups[pos] = [];
         groups[pos].push(p);
@@ -601,6 +620,8 @@ async function addPlayer(){
 }
 
 async function deletePlayer(id){
+
+    if(!checkDeletePassword()) return;
 
     if(!confirm("Smazat hráče?")) return;
 
@@ -765,6 +786,8 @@ async function addTeam(){
 
 async function deleteTeam(id){
 
+    if(!checkDeletePassword()) return;
+
     if(!confirm("Smazat tým?")) return;
 
     const data=await getData();
@@ -812,6 +835,5 @@ else if(state.view === "leagueMenu"){
 render();
 
 </script>
-
 </body>
 </html>
