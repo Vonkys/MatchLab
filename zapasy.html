@@ -325,7 +325,10 @@ async function fillTeams(){
 
     if(!league) return;
 
-    league.teams.forEach(t=>{
+    (league.teams || [])
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(t=>{
         home.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
         away.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
     });
