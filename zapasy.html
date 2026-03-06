@@ -223,10 +223,21 @@ async function fillSeasons(){
     const sport = data.sports.find(s=>s.id===sportId);
     const league = sport.leagues.find(l=>l.id===leagueId);
 
-    (league.seasons || []).forEach(s=>{
-        seasonSelect.innerHTML +=
-            `<option value="${s.id}">${s.name}</option>`;
-    });
+    (league.seasons || [])
+.sort((a,b)=>{
+
+const getYear = s => {
+    const match = s.name.match(/\d{4}/);
+    return match ? Number(match[0]) : 0;
+};
+
+return getYear(b) - getYear(a);
+
+})
+.forEach(s=>{
+    seasonSelect.innerHTML +=
+        `<option value="${s.id}">${s.name}</option>`;
+});
 
     seasonSelect.innerHTML +=
         `<option value="new">➕ Nová sezóna</option>`;
@@ -257,10 +268,12 @@ async function fillRounds(){
     const league = sport?.leagues.find(l=>l.id===leagueId);
     const season = league?.seasons?.find(s=>s.id===seasonId);
 
-    season?.rounds?.forEach(r=>{
-        roundSelect.innerHTML +=
-            `<option value="${r.id}">${r.number}. kolo</option>`;
-    });
+    (season?.rounds || [])
+.sort((a,b)=> b.number - a.number)
+.forEach(r=>{
+    roundSelect.innerHTML +=
+        `<option value="${r.id}">${r.number}. kolo</option>`;
+});
 
     roundSelect.innerHTML +=
         `<option value="new">➕ Nové kolo</option>`;
@@ -391,6 +404,7 @@ if(!roundObj){
     };
     season.rounds.push(roundObj);
 }
+season.rounds.sort((a,b)=> a.number - b.number);
 // uloz datum kola pokud jeste nema
 if(!roundObj.date){
     roundObj.date = date;
@@ -467,7 +481,14 @@ data.sports.forEach(sport=>{
         }];
 
         seasons.sort((a,b)=>{
-    return b.name.localeCompare(a.name);
+
+const getYear = s => {
+    const match = s.name.match(/\d{4}/);
+    return match ? Number(match[0]) : 0;
+};
+
+return getYear(b) - getYear(a);
+
 });
         
         seasons.forEach(season=>{
@@ -488,13 +509,15 @@ data.sports.forEach(sport=>{
             seasonWrap.appendChild(seasonDiv);
             seasonWrap.appendChild(roundWrap);
 
-            (season.rounds || [])
-    .sort((a,b)=> b.number - a.number)
-    .forEach(round=>{
+            
+    (season.rounds || [])
+.sort((a,b)=> b.number - a.number)
+.forEach(round=>{
+    
 
                 const roundDiv=document.createElement("div");
                 roundDiv.className="card";
-                roundDiv.innerText="▶ "+round.name;
+               roundDiv.innerText="▶ "+round.number+". kolo";
 
                 const matchWrap=document.createElement("div");
                 matchWrap.style.display="none";
