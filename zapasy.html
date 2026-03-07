@@ -120,6 +120,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const DELETE_PASSWORD = "1387";
+
+function checkDeletePassword(){
+
+const pass = prompt("Zadej heslo pro mazání:");
+
+if(pass !== DELETE_PASSWORD){
+    alert("Špatné heslo");
+    return false;
+}
+
+return true;
+
+}
+
 /* ================= STORAGE ================= */
 
 async function getData(){
@@ -597,7 +612,10 @@ matchWrap.appendChild(row);
 
 async function deleteMatch(matchId){
 
+if(!checkDeletePassword()) return;
+
 if(!confirm("Smazat zápas?")) return;
+
 
 const data = await getData();
 
@@ -620,6 +638,8 @@ await saveData(data);
 render();
 }
 async function deleteSeason(leagueId, seasonId){
+
+if(!checkDeletePassword()) return;
 
 if(!confirm("Smazat celou sezónu?")) return;
 
