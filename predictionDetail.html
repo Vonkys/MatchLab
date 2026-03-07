@@ -116,7 +116,7 @@ function getLeagueAverages(league, season){
     season.rounds?.forEach(round=>{
         round.matches?.forEach(match=>{
 
-            if(match.status !== "played") return;
+            if(match.homeScore == null || match.awayScore == null) return;
 
             totalMatches++;
 
@@ -151,7 +151,7 @@ function getLeagueAverages(league, season){
 
 // ===== TEAM HOME/AWAY STATS =====
 
-function getTeamSeasonStats(league, season, teamId){
+function getTeamSeasonStats(league, season, teamId, leagueAvg){
 
     let homePlayed = 0;
     let awayPlayed = 0;
@@ -168,67 +168,73 @@ function getTeamSeasonStats(league, season, teamId){
     season.rounds?.forEach(round=>{
         round.matches?.forEach(match=>{
 
-            if(match.status !== "played") return;
+            if(match.homeScore == null || match.awayScore == null) return;
 
-            if(match.homeTeam === teamId){
-
+            if(String(match.homeTeam).trim() === String(teamId).trim()){
+    
                 homePlayed++;
-                homeGoals += match.homeScore || 0;
-                homeGoalsAgainst += match.awayScore || 0;
+                homeGoals += Number(match.homeScore) || 0;
+                homeGoalsAgainst += Number(match.awayScore) || 0;
 
-                (match.homeLineup || []).forEach(pid=>{
-                    homeXG += match.playerStats?.[pid]?.xg || 0;
-                });
+                if(match.playerStats){
+                    Object.values(match.playerStats).forEach(ps=>{
+                        homeXG += ps.xg || 0;
+                    });
+                }
             }
 
-            if(match.awayTeam === teamId){
+            if(String(match.awayTeam).trim() === String(teamId).trim()){
 
                 awayPlayed++;
-                awayGoals += match.awayScore || 0;
-                awayGoalsAgainst += match.homeScore || 0;
-
-                (match.awayLineup || []).forEach(pid=>{
-                    awayXG += match.playerStats?.[pid]?.xg || 0;
-                });
+                awayGoals += Number(match.awayScore) || 0;
+                awayGoalsAgainst += Number(match.homeScore) || 0;
+                
+                if(match.playerStats){
+                    Object.values(match.playerStats).forEach(ps=>{
+                        awayXG += ps.xg || 0;
+                    });
+                }
             }
 
         });
     });
 
     const totalPlayed = homePlayed + awayPlayed;
-const totalGoals = homeGoals + awayGoals;
-const totalGoalsAgainst = homeGoalsAgainst + awayGoalsAgainst;
-const totalXG = homeXG + awayXG;
+    const totalGoals = homeGoals + awayGoals;
+    const totalGoalsAgainst = homeGoalsAgainst + awayGoalsAgainst;
+    const totalXG = homeXG + awayXG;
 
-return {
-    homePlayed,
-    awayPlayed,
+    return {
+        homePlayed,
+        awayPlayed,
 
-    homeGoalsPerMatch: homePlayed
-        ? homeGoals / homePlayed
-        : (totalPlayed ? totalGoals / totalPlayed : 0),
+    homeGoalsPerMatch:
+    (homeGoals + leagueAvg.avgGoals) /
+    (homePlayed + 1),
+        
+              homeGoalsAgainstPerMatch: homePlayed
+            ? homeGoalsAgainst / homePlayed
+            : (totalPlayed ? totalGoalsAgainst / totalPlayed : 0),
 
-    homeGoalsAgainstPerMatch: homePlayed
-        ? homeGoalsAgainst / homePlayed
-        : (totalPlayed ? totalGoalsAgainst / totalPlayed : 0),
+      awayGoalsPerMatch:
+    (awayGoals + leagueAvg.avgGoals) /
+    (awayPlayed + 1),
 
-    awayGoalsPerMatch: awayPlayed
-        ? awayGoals / awayPlayed
-        : (totalPlayed ? totalGoals / totalPlayed : 0),
+        awayGoalsAgainstPerMatch: awayPlayed
+            ? awayGoalsAgainst / awayPlayed
+            : (totalPlayed ? totalGoalsAgainst / totalPlayed : 0),
 
-    awayGoalsAgainstPerMatch: awayPlayed
-        ? awayGoalsAgainst / awayPlayed
-        : (totalPlayed ? totalGoalsAgainst / totalPlayed : 0),
+        homeXGPerMatch: homePlayed
+            ? homeXG / homePlayed
+            : (totalPlayed ? totalXG / totalPlayed : 0),
 
-    homeXGPerMatch: homePlayed
-        ? homeXG / homePlayed
-        : (totalPlayed ? totalXG / totalPlayed : 0),
-
-    awayXGPerMatch: awayPlayed
-        ? awayXG / awayPlayed
-        : (totalPlayed ? totalXG / totalPlayed : 0)
-};
+        awayXGPerMatch: awayPlayed
+            ? awayXG / awayPlayed
+            : (totalPlayed ? totalXG / totalPlayed : 0)
+    };
 }
+
+   
 
 async function render(){
 
@@ -251,15 +257,51 @@ const season = league.seasons?.[league.seasons.length - 1];
 
 const leagueAvg = getLeagueAverages(league, season);
 
-const homeStats = getTeamSeasonStats(league, season, match.homeTeam);
-const awayStats = getTeamSeasonStats(league, season, match.awayTeam);
+const homeStats = getTeamSeasonStats(league, season, match.homeTeam, leagueAvg);
+const awayStats = getTeamSeasonStats(league, season, match.awayTeam, leagueAvg);
 
+// ===== EXPECTED GOALS =====
 
-season?.rounds?.forEach(r=>{
-    r.matches?.forEach(m=>{
-        console.log("Match:", m.homeScore, m.awayScore, m.status);
-    });
-});    
+const leagueGoals = (leagueAvg.avgGoals || 2.6) / 2;
+
+const homeAttack = homeStats.homeGoalsPerMatch / leagueGoals;
+const homeDefense = (homeStats.homeGoalsAgainstPerMatch || leagueGoals) / leagueGoals;
+
+const awayAttack = awayStats.awayGoalsPerMatch / leagueGoals;
+const awayDefense = (awayStats.awayGoalsAgainstPerMatch || leagueGoals) / leagueGoals;
+
+const homeExpectedGoals = homeAttack * awayDefense * leagueGoals;
+const awayExpectedGoals =
+    (awayAttack || 1) * (homeDefense || 1) * leagueGoals;
+
+// ===== RESULT PREDICTION =====
+
+let resultPrediction;
+
+if(homeExpectedGoals > awayExpectedGoals + 0.3){
+    resultPrediction = "1 (domácí)";
+}
+else if(awayExpectedGoals > homeExpectedGoals + 0.3){
+    resultPrediction = "2 (hosté)";
+}
+else{
+    resultPrediction = "X (remíza)";
+}
+
+// ===== GOALS PREDICTION =====
+
+const totalExpectedGoals = homeExpectedGoals + awayExpectedGoals;
+
+let goalsPrediction;
+
+if(totalExpectedGoals > 3){
+    goalsPrediction = "Over 2.5";
+}
+else{
+    goalsPrediction = "Under 2.5";
+}
+
+  
     
 const home = league.teams.find(t=>t.id===match.homeTeam);
     const away = league.teams.find(t=>t.id===match.awayTeam);
@@ -290,9 +332,17 @@ const home = league.teams.find(t=>t.id===match.homeTeam);
         </div>
     `;
     document.getElementById("resultPrediction").innerHTML = `
-    Průměr gólů ligy: ${leagueAvg.avgGoals.toFixed(2)}<br>
-    Domácí góly / zápas: ${homeStats.homeGoalsPerMatch.toFixed(2)}<br>
-    Hosté góly / zápas: ${awayStats.awayGoalsPerMatch.toFixed(2)}
+<b>${resultPrediction}</b><br>
+Očekávané góly: ${homeExpectedGoals.toFixed(2)} : ${awayExpectedGoals.toFixed(2)}
+`;
+
+document.getElementById("goalsPrediction").innerHTML = `
+${goalsPrediction}<br>
+Expected goals total: ${totalExpectedGoals.toFixed(2)}
+`;
+
+document.getElementById("cardsPrediction").innerHTML = `
+Průměr karet v lize: ${leagueAvg.avgCards.toFixed(2)}
 `;
 
 }
