@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MatchLab Login</title>
+
+<style>
+
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+font-family:system-ui;
+}
+
+body{
+background:radial-gradient(circle at top,#141414,#060606);
+color:white;
+display:flex;
+align-items:center;
+justify-content:center;
+height:100vh;
+}
+
+/* LOGIN BOX */
+
+.loginBox{
+width:100%;
+max-width:360px;
+padding:35px;
+border-radius:16px;
+background:linear-gradient(145deg,#1b1b1b,#101010);
+border:1px solid rgba(255,255,255,0.06);
+box-shadow:0 20px 40px rgba(0,0,0,.6);
+text-align:center;
+}
+
+.title{
+font-size:26px;
+letter-spacing:3px;
+margin-bottom:10px;
+}
+
+.subtitle{
+font-size:13px;
+color:#888;
+margin-bottom:25px;
+}
+
+/* INPUT */
+
+input{
+width:100%;
+padding:14px;
+margin-bottom:15px;
+border-radius:10px;
+border:1px solid #333;
+background:#0f0f0f;
+color:white;
+font-size:15px;
+outline:none;
+}
+
+input:focus{
+border-color:#2ecc71;
+}
+
+/* BUTTON */
+
+button{
+width:100%;
+padding:14px;
+border:none;
+border-radius:10px;
+font-size:16px;
+cursor:pointer;
+margin-top:8px;
+transition:.2s;
+}
+
+.loginBtn{
+background:#2ecc71;
+color:black;
+font-weight:600;
+}
+
+.loginBtn:hover{
+background:#36f784;
+}
+
+.registerBtn{
+background:#2b2b2b;
+color:white;
+}
+
+.registerBtn:hover{
+background:#3a3a3a;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="loginBox">
+
+<div class="title">MATCHLAB</div>
+<div class="subtitle">Football & Hockey Prediction Engine</div>
+
+<input id="email" placeholder="Email">
+
+<input id="password" type="password" placeholder="Heslo">
+
+<button class="loginBtn" onclick="login()">Přihlásit</button>
+<button class="registerBtn" onclick="register()">Registrovat</button>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth,
+signInWithEmailAndPassword,
+createUserWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+authDomain: "matchlab-f7fb8.firebaseapp.com",
+projectId: "matchlab-f7fb8",
+storageBucket: "matchlab-f7fb8.firebasestorage.app",
+messagingSenderId: "791469272358",
+appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+window.login=function(){
+
+const email=document.getElementById("email").value;
+const pass=document.getElementById("password").value;
+
+signInWithEmailAndPassword(auth,email,pass)
+.then(()=>{
+window.location.href="index.html";
+})
+.catch(err=>{
+alert(err.message);
+});
+
+}
+
+window.register=function(){
+
+const email=document.getElementById("email").value;
+const pass=document.getElementById("password").value;
+
+createUserWithEmailAndPassword(auth,email,pass)
+.then(()=>{
+alert("Registrace hotová");
+})
+.catch(err=>{
+alert(err.message);
+});
+
+}
+
+</script>
+
+</body>
+</html>
