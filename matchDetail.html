@@ -219,7 +219,9 @@ function rebuildPlayerStats(data){
                                   plusMinus:0,
                                   penaltyMinutes:0,
                                   faceoffsTotal:0,
-                                  faceoffsWon:0
+                                  faceoffsWon:0,
+                                  saves:0,
+                                  shotsAgainst:0
                                   };
                                 }
                                 // ===== TOTAL =====
@@ -252,6 +254,8 @@ function rebuildPlayerStats(data){
                                 player.stats.seasons[seasonId].faceoffsTotal += stats.faceoffsTotal || 0;
                                 player.stats.seasons[seasonId].faceoffsWon += stats.faceoffsWon || 0;
                                 player.stats.seasons[seasonId].penaltyMinutes += stats.penaltyMinutes || 0;
+                                player.stats.seasons[seasonId].saves += stats.saves || 0;
+                                player.stats.seasons[seasonId].shotsAgainst += stats.shotsAgainst || 0;
                             });
                         });
 
@@ -545,36 +549,48 @@ if(match.refereeId){
 
        const inputs = row.querySelectorAll("input:not([type=checkbox])");
 
-      let keys;
+     let keys;
 
 if(sport.name === "Hokej"){
 
+   if(row.dataset.position === "GK"){
+
 keys=[
 "minutes",
-"goals",
-"assists",
-"plusMinus",
-"shots",
-"penaltyMinutes",
-"faceoffsTotal",
-"faceoffsWon"
+"saves",
+"shotsAgainst"
 ];
+
+    }else{
+
+        keys=[
+            "minutes",
+            "goals",
+            "assists",
+            "plusMinus",
+            "shots",
+            "penaltyMinutes",
+            "faceoffsTotal",
+            "faceoffsWon"
+        ];
+
+    }
 
 }else{
 
-keys=[
-"minutes",
-"goals",
-"ownGoals",
-"assists",
-"yellow",
-"red",
-"rating",
-"shots",
-"xg",
-"passesMade",
-"passesTotal"
-];
+    keys=[
+        "minutes",
+        "goals",
+        "ownGoals",
+        "assists",
+        "yellow",
+        "red",
+        "rating",
+        "shots",
+        "xg",
+        "passesMade",
+        "passesTotal"
+    ];
 
 }
 
@@ -593,6 +609,14 @@ if(raw.includes(":")){
 let parts = raw.split(":");
 let min = Number(parts[0]) || 0;
 let sec = Number(parts[1]) || 0;
+
+stats[keys[i]] = (min * 60) + sec;
+
+}else if(raw.length >= 3){
+
+// např 2021 → 20:21
+let min = Number(raw.slice(0,-2)) || 0;
+let sec = Number(raw.slice(-2)) || 0;
 
 stats[keys[i]] = (min * 60) + sec;
 
@@ -657,6 +681,7 @@ function renderPlayers(players,containerId,lineupKey,match,sport){
         row.style.border="1px solid #ff9f43";
         }
         row.dataset.playerId = p.id;
+        row.dataset.position = p.position;
         const top=document.createElement("div");
         top.style.display="flex";
         top.style.alignItems="center";
@@ -679,36 +704,55 @@ function renderPlayers(players,containerId,lineupKey,match,sport){
         statsDiv.style.gap="6px";
         statsDiv.style.marginTop="8px";
 
-       let fields;
+     let fields;
 
 if(sport.name === "Hokej"){
 
-fields=[
-    {key:"minutes",ph:"MM:SS"},
-    {key:"goals",ph:"G"},
-    {key:"assists",ph:"A"},
-    {key:"plusMinus",ph:"+/-"},
-    {key:"shots",ph:"Stř"},
-    {key:"penaltyMinutes",ph:"TM"},   // 🔥 trestné minuty
-    {key:"faceoffsTotal",ph:"Buly"},
-    {key:"faceoffsWon",ph:"Buly✓"}
-];
-
-}else{
+    // ===== BRANKÁŘ =====
+    if(p.position === "GK"){
 
 fields=[
-    {key:"minutes",ph:"Min"},
-    {key:"goals",ph:"G"},
-    {key:"ownGoals",ph:"OG"},
-    {key:"assists",ph:"A"},
-    {key:"yellow",ph:"🟨"},
-    {key:"red",ph:"🟥"},
-    {key:"rating",ph:"⭐",step:"0.1"},
-    {key:"shots",ph:"Stř"},
-    {key:"xg",ph:"xG",step:"0.01"},
-    {key:"passesMade",ph:"P✓"},
-    {key:"passesTotal",ph:"PΣ"}
+    {key:"minutes",ph:"MMSS"},
+    {key:"saves",ph:"Zák"},
+    {key:"shotsAgainst",ph:"Stř↓"}
 ];
+
+    }
+
+    // ===== HRÁČI V POLI =====
+    else{
+
+        fields=[
+            {key:"minutes",ph:"MMSS"},
+            {key:"goals",ph:"G"},
+            {key:"assists",ph:"A"},
+            {key:"plusMinus",ph:"+/-"},
+            {key:"shots",ph:"Stř"},
+            {key:"penaltyMinutes",ph:"TM"},
+            {key:"faceoffsTotal",ph:"Buly"},
+            {key:"faceoffsWon",ph:"Buly✓"}
+        ];
+
+    }
+
+}
+
+else{
+
+    // ===== FOTBAL =====
+    fields=[
+        {key:"minutes",ph:"Min"},
+        {key:"goals",ph:"G"},
+        {key:"ownGoals",ph:"OG"},
+        {key:"assists",ph:"A"},
+        {key:"yellow",ph:"🟨"},
+        {key:"red",ph:"🟥"},
+        {key:"rating",ph:"⭐",step:"0.1"},
+        {key:"shots",ph:"Stř"},
+        {key:"xg",ph:"xG",step:"0.01"},
+        {key:"passesMade",ph:"P✓"},
+        {key:"passesTotal",ph:"PΣ"}
+    ];
 
 }
         const inputs={};
