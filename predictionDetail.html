@@ -148,7 +148,40 @@ function getLeagueAverages(league, season){
     };
 }
 
+// ===== REFEREE STATS =====
 
+function getRefereeStats(league, season){
+
+    let stats = {};
+
+    season.rounds?.forEach(round=>{
+        round.matches?.forEach(match=>{
+
+            if(match.status !== "played") return;
+            if(!match.refereeId) return;
+
+            if(!stats[match.refereeId]){
+                stats[match.refereeId] = {
+                    matches:0,
+                    yellow:0,
+                    red:0
+                };
+            }
+
+            stats[match.refereeId].matches++;
+
+            if(match.playerStats){
+                Object.values(match.playerStats).forEach(ps=>{
+                    stats[match.refereeId].yellow += ps.yellow || 0;
+                    stats[match.refereeId].red += ps.red || 0;
+                });
+            }
+
+        });
+    });
+
+    return stats;
+}
 // ===== TEAM HOME/AWAY STATS =====
 
 function getTeamSeasonStats(league, season, teamId, leagueAvg){
@@ -257,6 +290,20 @@ const season = league.seasons?.[league.seasons.length - 1];
 
 const leagueAvg = getLeagueAverages(league, season);
 
+// ===== REFEREE IMPACT =====
+
+const refereeStats = getRefereeStats(league, season);
+
+let refYellowAvg = 0;
+let refRedAvg = 0;
+
+if(match.refereeId && refereeStats[match.refereeId]){
+
+    const r = refereeStats[match.refereeId];
+
+    refYellowAvg = r.yellow / r.matches;
+    refRedAvg = r.red / r.matches;
+}
 const homeStats = getTeamSeasonStats(league, season, match.homeTeam, leagueAvg);
 const awayStats = getTeamSeasonStats(league, season, match.awayTeam, leagueAvg);
 
@@ -341,8 +388,16 @@ ${goalsPrediction}<br>
 Expected goals total: ${totalExpectedGoals.toFixed(2)}
 `;
 
+let predictedCards = leagueAvg.avgCards;
+
+if(refYellowAvg > 0){
+    predictedCards = (leagueAvg.avgCards + refYellowAvg) / 2;
+}
+
 document.getElementById("cardsPrediction").innerHTML = `
-Průměr karet v lize: ${leagueAvg.avgCards.toFixed(2)}
+Průměr ligy: ${leagueAvg.avgCards.toFixed(2)}<br>
+Rozhodčí: ${refYellowAvg ? refYellowAvg.toFixed(2) : "bez dat"}<br>
+Predikce karet: <b>${predictedCards.toFixed(2)}</b>
 `;
 
 }
