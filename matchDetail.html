@@ -126,6 +126,11 @@ function calculateScore(match){
 
     if(!match.playerStats) return;
 
+    // 🔥 FIX – pokud nejsou žádné statistiky hráčů
+    if(Object.keys(match.playerStats).length === 0){
+        return;
+    }
+
     (match.homeLineup || []).forEach(pid=>{
         const stats = match.playerStats[pid];
         if(!stats) return;
@@ -145,7 +150,6 @@ function calculateScore(match){
     match.homeScore = homeGoals + awayOwnGoals;
     match.awayScore = awayGoals + homeOwnGoals;
 
-    // ===== HOKEJ NÁJEZDY =====
     if(match.shootout){
         if(match.homeScore === match.awayScore){
             match.homeScore += 1;
@@ -645,10 +649,13 @@ stats[keys[i]] = Number(raw) || 0;
 
     });
 
-    calculateScore(match);
+   calculateScore(match);
 
-rebuildPlayerStats(data);
-rebuildTeamStats(data);
+// 🔥 rebuild jen když je zápas odehraný
+if(match.status === "played"){
+    rebuildPlayerStats(data);
+    rebuildTeamStats(data);
+}
 
 await saveData(data);
 window.location.href="zapasy.html";
@@ -689,7 +696,7 @@ function renderPlayers(players,containerId,lineupKey,match,sport){
 
         const checkbox=document.createElement("input");
         checkbox.type="checkbox";
-        checkbox.checked=match[lineupKey].includes(p.id);
+        checkbox.checked = (match[lineupKey] || []).includes(p.id);
 
         const name=document.createElement("div");
         name.innerText=p.name;
