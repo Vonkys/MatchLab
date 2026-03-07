@@ -557,7 +557,10 @@ seasonDiv.children[1].onclick=async (e)=>{
                 roundWrap.appendChild(roundDiv);
                 roundWrap.appendChild(matchWrap);
 
-                round.matches?.forEach(match=>{
+                (round.matches || [])
+                .slice()
+                .sort((a,b)=> new Date(a.date) - new Date(b.date))
+                .forEach(match=>{
 
                     const home=league.teams.find(t=>t.id===match.homeTeam);
                     const away=league.teams.find(t=>t.id===match.awayTeam);
