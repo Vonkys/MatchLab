@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetLab Statistiky</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+margin:0;
+font-family:system-ui;
+background:#0b0b0b;
+color:white;
+display:none;
+}
+
+.topbar{
+padding:18px;
+text-align:center;
+background:#111;
+border-bottom:1px solid #222;
+}
+
+.container{
+max-width:420px;
+margin:auto;
+padding:20px;
+}
+
+.card{
+background:#1b1b1b;
+padding:16px;
+border-radius:12px;
+margin-bottom:14px;
+border:1px solid #222;
+}
+
+.stat{
+display:flex;
+justify-content:space-between;
+margin:6px 0;
+}
+
+.big{
+font-size:22px;
+font-weight:bold;
+text-align:center;
+margin-bottom:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<span onclick="window.location.href='betlab.html'" style="cursor:pointer">
+← Zpět
+</span>
+</div>
+
+<div class="container">
+
+<h2>BetLab statistiky</h2>
+
+<div class="card">
+<div class="big" id="profit">0 Kč</div>
+
+<div class="stat"><span>Sázky</span><span id="bets">0</span></div>
+<div class="stat"><span>Výhry</span><span id="wins">0</span></div>
+<div class="stat"><span>Prohry</span><span id="losses">0</span></div>
+<div class="stat"><span>Winrate</span><span id="winrate">0%</span></div>
+
+<div class="stat"><span>ROI</span><span id="roi">0%</span></div>
+<div class="stat"><span>Yield</span><span id="yield">0%</span></div>
+
+</div>
+
+<div class="card">
+<canvas id="bankrollChart"></canvas>
+</div>
+
+</div>
+
+<script type="module">
+
+import { initializeApp }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+
+import { getFirestore, collection, getDocs, doc, getDoc, query, where }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+import { getAuth, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+authDomain: "matchlab-f7fb8.firebaseapp.com",
+projectId: "matchlab-f7fb8",
+storageBucket: "matchlab-f7fb8.firebasestorage.app",
+messagingSenderId: "791469272358",
+appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+onAuthStateChanged(auth,(user)=>{
+
+if(!user){
+window.location.href="login.html";
+return;
+}
+
+document.body.style.display="block";
+loadStats();
+
+});
+
+
+
+function evaluateBet(bet, match){
+
+if(!match) return {status:"pending",profit:0};
+
+if(match.status !== "played"){
+return {status:"pending",profit:0};
+}
+
+const home = Number(match.homeScore);
+const away = Number(match.awayScore);
+
+let result;
+
+if(home>away) result="1";
+else if(home<away) result="2";
+else result="X";
+
+if(String(bet.type) === String(result)){
+
+return {
+status:"win",
+profit:(bet.stake * bet.odds - bet.stake)
+};
+
+}else{
+
+return {
+status:"loss",
+profit:-bet.stake
+};
+
+}
+
+}
+
+async function loadStats(){
+
+const q = query(
+collection(db,"bets"),
+where("userId","==",auth.currentUser.uid)
+);
+
+const snap = await getDocs(q);
+
+
+
+let bets=0;
+let wins=0;
+let losses=0;
+
+let totalStake=0;
+let totalProfit=0;
+
+let bankroll=0;
+let chartData=[];
+let labels=[];
+
+let index=1;
+
+for(const d of snap.docs){
+
+const bet = d.data();
+
+const matchSnap = await getDoc(doc(db,"matches", bet.matchId));
+const match = matchSnap.exists() ? matchSnap.data() : null;
+
+const result = evaluateBet(bet,match);
+
+if(result.status==="pending") continue;
+
+bets++;
+
+totalStake += bet.stake;
+totalProfit += result.profit;
+
+if(result.status==="win") wins++;
+if(result.status==="loss") losses++;
+
+bankroll += result.profit;
+
+chartData.push(bankroll);
+labels.push(index++);
+
+}
+
+const winrate = bets ? (wins/bets)*100 : 0;
+const roi = totalStake ? (totalProfit/totalStake)*100 : 0;
+const yieldStat = roi;
+
+document.getElementById("profit").innerText =
+(totalProfit>=0?"+":"") + totalProfit.toFixed(0) + " Kč";
+
+document.getElementById("bets").innerText = bets;
+document.getElementById("wins").innerText = wins;
+document.getElementById("losses").innerText = losses;
+
+document.getElementById("winrate").innerText =
+winrate.toFixed(1) + "%";
+
+document.getElementById("roi").innerText =
+roi.toFixed(1) + "%";
+
+document.getElementById("yield").innerText =
+yieldStat.toFixed(1) + "%";
+
+renderChart(labels, chartData);
+
+}
+
+function renderChart(labels,data){
+
+const ctx=document.getElementById("bankrollChart");
+
+new Chart(ctx,{
+
+type:"line",
+
+data:{
+labels:labels,
+datasets:[{
+label:"Bankroll",
+data:data,
+borderColor:"#2ecc71",
+backgroundColor:"rgba(46,204,113,0.2)",
+fill:true,
+tension:0.3
+}]
+},
+
+options:{
+plugins:{
+legend:{display:false}
+},
+scales:{
+x:{
+ticks:{color:"#aaa"}
+},
+y:{
+ticks:{color:"#aaa"}
+}
+}
+}
+
+});
+
+}
+
+</script>
+
+</body>
+</html>
