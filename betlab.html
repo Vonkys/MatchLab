@@ -139,6 +139,7 @@ loadBets();
 
 function evaluateBet(bet, match){
 
+// zápas nenalezen
 if(!match){
 return {
 status:"pending",
@@ -146,7 +147,12 @@ profit:0
 };
 }
 
-if(match.status !== "played"){
+// zápas ještě není odehraný
+if(
+match.homeScore == null ||
+match.awayScore == null ||
+match.status !== "played"
+){
 return {
 status:"pending",
 profit:0
@@ -162,21 +168,19 @@ if(home > away) result = "1";
 else if(home < away) result = "2";
 else result = "X";
 
+// výhra
 if(String(bet.type) === String(result)){
-
 return {
 status:"win",
 profit:(bet.stake * bet.odds - bet.stake)
 };
+}
 
-}else{
-
+// prohra
 return {
 status:"loss",
 profit:-bet.stake
 };
-
-}
 
 }
 
@@ -206,8 +210,40 @@ for(const d of snap.docs){
 
 const bet = d.data();
 
-const matchSnap = await getDoc(doc(db,"matches", bet.matchId));
-const match = matchSnap.exists() ? matchSnap.data() : null;
+let match = null;
+
+if(bet.leagueId){
+
+const matchSnap = await getDoc(
+doc(db,"matches", bet.leagueId, "list", bet.matchId)
+);
+
+match = matchSnap.exists() ? matchSnap.data() : null;
+
+}else{
+
+// fallback – projdi všechny ligy
+const leaguesSnap = await getDocs(collection(db,"matches"));
+
+for(const leagueDoc of leaguesSnap.docs){
+
+const matchesSnap = await getDocs(
+collection(db,"matches", leagueDoc.id, "list")
+);
+
+for(const mdoc of matchesSnap.docs){
+if(mdoc.id === bet.matchId){
+match = mdoc.data();
+break;
+}
+}
+
+if(match) break;
+
+}
+
+}
+
 
 const result = evaluateBet(bet, match);
 
