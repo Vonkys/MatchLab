@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statistiky rozhodčích</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+    display:none;
+}
+
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+}
+
+.container{
+    max-width:800px;
+    margin:auto;
+    padding:20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+
+th, td{
+    padding:8px;
+    text-align:center;
+    border-bottom:1px solid #222;
+}
+
+th{
+    background:#1b1b1b;
+}
+
+.name{
+    text-align:left;
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<span onclick="goBack()" style="cursor:pointer">
+← Zpět na tabulku
+</span>
+</div>
+
+<div class="container">
+    <h2 id="leagueTitle">Statistiky rozhodčích</h2>
+    <table id="table"></table>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+function getLeagueId(){
+    return new URLSearchParams(window.location.search).get("league");
+}
+
+window.goBack = function(){
+    const leagueId = getLeagueId();
+    window.location.href = "tabulky.html?league=" + leagueId;
+}
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+onAuthStateChanged(auth,(user)=>{
+
+if(!user){
+window.location.href="login.html";
+return;
+}
+
+document.body.style.display="block";
+
+});
+
+async function loadReferees(){
+
+    const snap = await getDoc(doc(db,"appData","main"));
+    const data = snap.data();
+
+    const leagueId = getLeagueId();
+
+let league = null;
+
+data.sports.forEach(s=>{
+    s.leagues?.forEach(l=>{
+        if(l.id === leagueId){
+            league = l;
+        }
+    });
+});
+
+if(!league){
+    document.getElementById("leagueTitle").textContent = "Liga nenalezena";
+    return;
+}
+
+    document.getElementById("leagueTitle").textContent =
+        `Statistiky rozhodčích – ${league.name}`;
+
+    // 🔥 načteme zápasy jen dané ligy
+let playedMatches = [];
+
+const snapMatches = await getDocs(
+collection(db,"matches",leagueId,"list")
+);
+
+snapMatches.forEach(d=>{
+const m = d.data();
+if(m.status === "played"){
+playedMatches.push(m);
+}
+});
+
+    let refStats = {};
+
+    playedMatches.forEach(match=>{
+
+        if(!match.refereeId) return;
+
+        if(!refStats[match.refereeId]){
+            refStats[match.refereeId] = {
+                matches:0,
+                yellow:0,
+                red:0
+            };
+        }
+
+        refStats[match.refereeId].matches++;
+
+        // 🔥 spočítáme karty ze všech hráčů
+        if(match.playerStats){
+            Object.values(match.playerStats).forEach(ps=>{
+                refStats[match.refereeId].yellow += ps.yellow || 0;
+                refStats[match.refereeId].red += ps.red || 0;
+            });
+        }
+
+    });
+
+    let rows = [];
+
+    // 🔥 načti referees z nové kolekce
+const refsSnap = await getDocs(
+query(
+collection(db,"referees"),
+where("leagueId","==",leagueId)
+)
+);
+
+const referees = refsSnap.docs.map(d=>d.data());
+
+referees.forEach(ref=>{
+
+const stats = refStats[ref.id];
+if(!stats){
+rows.push({
+name:ref.name,
+matches:0,
+yellow:0,
+red:0,
+yellowAvg:"0.00",
+redAvg:"0.00"
+});
+return;
+}
+
+rows.push({
+name:ref.name,
+matches:stats.matches,
+yellow:stats.yellow,
+red:stats.red,
+yellowAvg:(stats.yellow / stats.matches).toFixed(2),
+redAvg:(stats.red / stats.matches).toFixed(2)
+});
+
+});
+
+    // řazení podle průměru žlutých
+    rows.sort((a,b)=> Number(b.yellowAvg) - Number(a.yellowAvg));
+
+    renderTable(rows);
+}
+
+function renderTable(rows){
+
+    const table = document.getElementById("table");
+
+    table.innerHTML = `
+        <tr>
+            <th>#</th>
+            <th class="name">Rozhodčí</th>
+            <th>Zápasy</th>
+            <th>🟨</th>
+            <th>🟥</th>
+            <th>🟨 / zápas</th>
+            <th>🟥 / zápas</th>
+        </tr>
+    `;
+
+    rows.forEach((r,i)=>{
+
+        table.innerHTML += `
+            <tr>
+                <td>${i+1}</td>
+                <td class="name">${r.name}</td>
+                <td>${r.matches}</td>
+                <td>${r.yellow}</td>
+                <td>${r.red}</td>
+                <td>${r.yellowAvg}</td>
+                <td>${r.redAvg}</td>
+            </tr>
+        `;
+    });
+}
+
+loadReferees();
+
+</script>
+</body>
+</html>
