@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MatchLab</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+    display:none;
+}
+
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+    letter-spacing:3px;
+    font-weight:bold;
+}
+
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+}
+
+input{
+    width:100%;
+    padding:14px;
+    margin-top:10px;
+    border:none;
+    border-radius:10px;
+    background:#1b1b1b;
+    color:white;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    margin-top:10px;
+    border:none;
+    border-radius:10px;
+    background:#2b2b2b;
+    color:white;
+    cursor:pointer;
+}
+
+button:hover{ background:#3a3a3a; }
+
+.card{
+    background:#1b1b1b;
+    padding:14px;
+    border-radius:10px;
+    margin-top:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.card span{
+    cursor:pointer;
+    flex:1;
+}
+
+.delete{
+    color:#ff6b6b;
+    cursor:pointer;
+    margin-left:10px;
+}
+
+.back{
+    margin-bottom:10px;
+    color:#aaa;
+    cursor:pointer;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <span onclick="goIndex()" style="cursor:pointer; user-select:none;">
+🏠 MATCHLAB
+</span>
+</div>
+<div id="app" class="container"></div>
+
+<script type="module">
+
+/* ================= FIREBASE ================= */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, query, where }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const DELETE_PASSWORD = "1387";
+
+function checkDeletePassword(){
+
+const pass = prompt("Zadej heslo pro mazání:");
+
+if(pass !== DELETE_PASSWORD){
+    alert("Špatné heslo");
+    return false;
+}
+
+return true;
+
+}
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+onAuthStateChanged(auth,(user)=>{
+
+if(!user){
+window.location.href="login.html";
+return;
+}
+
+document.body.style.display="block";
+
+});
+
+/* ================= STORAGE ================= */
+
+async function getData(){
+    const ref = doc(db,"appData","main");
+    const snap = await getDoc(ref);
+
+    if(snap.exists()) return snap.data();
+
+    const empty = { sports: [] };
+    await setDoc(ref, empty);
+    return empty;
+}
+
+async function saveData(data){
+    await setDoc(doc(db,"appData","main"), data);
+}
+/* ================= HELPERS ================= */
+
+function generateId(){
+    return "id_" + Date.now() + "_" + Math.floor(Math.random()*100000);
+}
+
+window.goIndex = () => window.location.href="./index.html";
+
+/* ================= STATE ================= */
+
+let state={
+    view:"sports",
+    sportId:null,
+    leagueId:null,
+    teamId:null,
+    playerId:null
+};
+
+/* ================= ROUTER ================= */
+
+async function render(){
+    if(state.view==="sports") await renderSports();
+    if(state.view==="leagues") await renderLeagues();
+    if(state.view==="leagueMenu") await renderLeagueMenu();
+    if(state.view==="teams") await renderTeams();
+    if(state.view==="referees") await renderReferees();
+    if(state.view==="players") await renderPlayers();
+    if(state.view==="playerDetail") await renderPlayerDetail();
+}
+
+/* ================= SPORTS ================= */
+
+async function renderSports(){
+
+    const data=await getData();
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <h2>Sporty</h2>
+        <input id="sportName" placeholder="Např. Fotbal">
+        <button id="addSportBtn">Přidat sport</button>
+        <div id="list"></div>
+    `;
+
+    document.getElementById("addSportBtn").onclick=addSport;
+
+    const list=document.getElementById("list");
+
+    data.sports.forEach(s=>{
+        const div=document.createElement("div");
+        div.className="card";
+
+        div.innerHTML=`
+            <span>${s.name}</span>
+            <div class="delete">✖</div>
+        `;
+
+        div.querySelector("span").onclick=()=>{
+            state.view="leagues";
+            state.sportId=s.id;
+            render();
+        };
+
+        div.querySelector(".delete").onclick=()=>deleteSport(s.id);
+
+        list.appendChild(div);
+    });
+}
+
+async function addSport(){
+
+    const name=document.getElementById("sportName").value.trim();
+    if(!name) return;
+
+    const data=await getData();
+
+    data.sports.push({
+        id:generateId(),
+        name,
+        leagues:[]
+    });
+
+    await saveData(data);
+    render();
+}
+
+async function deleteSport(id){
+
+    if(!checkDeletePassword()) return;
+
+    if(!confirm("Smazat sport?")) return;
+
+    const data=await getData();
+    data.sports=data.sports.filter(s=>s.id!==id);
+
+    await saveData(data);
+    render();
+}
+
+/* ================= LEAGUES ================= */
+
+async function renderLeagues(){
+
+    if(!state.sportId){
+        state.view = "sports";
+        render();
+        return;
+    }
+
+    const data = await getData();
+
+    const sport = data.sports.find(s=>s.id===state.sportId);
+
+    if(!sport){
+        state.view = "sports";
+        state.sportId = null;
+        render();
+        return;
+    }
+
+    const app = document.getElementById("app");
+
+    app.innerHTML=`
+        <div class="back">← zpět</div>
+        <h2>${sport.name}</h2>
+        <input id="leagueName" placeholder="Nová liga">
+        <button id="addLeagueBtn">Přidat ligu</button>
+        <div id="list"></div>
+    `;
+
+    document.querySelector(".back").onclick=goBack;
+    document.getElementById("addLeagueBtn").onclick=addLeague;
+
+    const list=document.getElementById("list");
+
+    sport.leagues.forEach(l=>{
+        const div=document.createElement("div");
+        div.className="card";
+
+        div.innerHTML=`
+            <span>${l.name}</span>
+            <div class="delete">✖</div>
+        `;
+
+        div.querySelector("span").onclick=()=>{
+    state.view="leagueMenu";
+    state.leagueId=l.id;
+    render();
+};
+
+        div.querySelector(".delete").onclick=()=>deleteLeague(l.id);
+
+        list.appendChild(div);
+    });
+}
+
+async function addLeague() {
+    const name = document.getElementById("leagueName").value.trim();
+    if (!name) return;
+
+    const data = await getData();
+    const sport = data.sports.find(s => s.id === state.sportId);
+
+    sport.leagues.push({
+        id: generateId(),
+        name,
+    });
+
+    await saveData(data);
+    render(); // Překreslí stránku, aby se ukázala nová liga
+}
+
+async function renderLeagueMenu(){
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+    const league=sport.leagues.find(l=>l.id===state.leagueId);
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <div class="back">← zpět</div>
+        <h2>${league.name}</h2>
+
+        <div class="card">
+            <span>Týmy</span>
+        </div>
+
+        <div class="card">
+            <span>Rozhodčí</span>
+        </div>
+    `;
+
+    document.querySelector(".back").onclick=goBack;
+
+    const cards=document.querySelectorAll(".card");
+
+    cards[0].onclick=()=>{
+        state.view="teams";
+        render();
+    };
+
+    cards[1].onclick=()=>{
+        state.view="referees";
+        render();
+    };
+}
+
+async function renderReferees(){
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+    const league=sport.leagues.find(l=>l.id===state.leagueId);
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <div class="back">← zpět</div>
+        <h2>Rozhodčí – ${league.name}</h2>
+
+        <input id="refName" placeholder="Nový rozhodčí">
+        <button id="addRefBtn">Přidat rozhodčího</button>
+
+        <div id="list"></div>
+    `;
+
+    document.querySelector(".back").onclick=()=>{
+        state.view="leagueMenu";
+        render();
+    };
+
+    // 🔥 načti referees z kolekce
+    const snap = await getDocs(
+        query(
+            collection(db,"referees"),
+            where("leagueId","==",state.leagueId)
+        )
+    );
+
+    const referees = snap.docs.map(d=>d.data());
+
+    // ➕ přidání
+    document.getElementById("addRefBtn").onclick=async ()=>{
+
+        const name=document.getElementById("refName").value.trim();
+        if(!name) return;
+
+        const id = generateId();
+
+        await setDoc(doc(db,"referees",id),{
+    id,
+    name,
+    leagueId: state.leagueId,
+    sportId: state.sportId
+});
+
+        render();
+    };
+
+    const list=document.getElementById("list");
+
+    referees
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+    .forEach(r=>{
+
+        const div=document.createElement("div");
+        div.className="card";
+
+        div.innerHTML=`
+            <span>${r.name}</span>
+            <div class="delete">✖</div>
+        `;
+
+        div.querySelector(".delete").onclick=async ()=>{
+
+            if(!confirm("Smazat rozhodčího?")) return;
+
+            await deleteDoc(doc(db,"referees",r.id));
+
+            render();
+        };
+
+        list.appendChild(div);
+    });
+}
+
+async function renderPlayers(){
+
+    const data = await getData();
+    const sport = data.sports.find(s=>s.id===state.sportId);
+    const league = sport.leagues.find(l=>l.id===state.leagueId);
+    const teamSnap = await getDoc(doc(db,"teams",state.teamId));
+const team = teamSnap.data();
+
+const snap = await getDocs(collection(db,"players"));
+const teamPlayers = snap.docs
+.map(d=>d.data())
+.filter(p => p.teamId === state.teamId);
+
+    const app = document.getElementById("app");
+
+    app.innerHTML=`
+        <div class="back">← zpět</div>
+        <h2>${team.name}</h2>
+
+        <input id="playerName" placeholder="Nový hráč">
+        <button id="addPlayerBtn">Přidat hráče</button>
+
+        <div id="list"></div>
+    `;
+
+    document.querySelector(".back").onclick = goBack;
+    document.getElementById("addPlayerBtn").onclick = addPlayer;
+
+    const list=document.getElementById("list");
+
+    // === ROZDĚLENÍ PODLE POZICE ===
+    const groups = {
+        GK: [],
+        DEF: [],
+        MID: [],
+        ATT: []
+    };
+
+    (teamPlayers || []).forEach(p=>{
+        const pos = p.position || "ATT";
+        if(!groups[pos]) groups[pos] = [];
+        groups[pos].push(p);
+    });
+
+    const positionLabels = {
+        GK: "🧤 Brankáři",
+        DEF: "🛡 Obránci",
+        MID: "🎯 Záložníci",
+        ATT: "⚡ Útočníci"
+    };
+
+    const positionColors = {
+    GK: "#3498db",   // modrá
+    DEF: "#2ecc71",  // zelená
+    MID: "#f1c40f",  // žlutá
+    ATT: "#e74c3c"   // červená
+};
+    
+    Object.keys(groups).forEach(pos=>{
+
+    if(groups[pos].length === 0) return;
+
+    // === SEKČNÍ WRAPPER ===
+    const section = document.createElement("div");
+    section.style.marginTop = "20px";
+    section.style.padding = "12px";
+    section.style.borderRadius = "10px";
+    section.style.background = positionColors[pos] + "15";
+    section.style.border = "1px solid " + positionColors[pos];
+
+    // === NADPIS ===
+    const title = document.createElement("h3");
+    title.style.marginBottom = "10px";
+    title.style.color = positionColors[pos];
+    title.textContent = positionLabels[pos] || pos;
+
+    section.appendChild(title);
+
+    // === SEŘAZENÍ HRÁČŮ ABECEDNĚ ===
+    groups[pos]
+        .slice()
+        .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+        .forEach(p=>{
+
+            const div=document.createElement("div");
+            div.className="card";
+
+            // === STATUS IKONA ===
+            let statusIcon = "";
+
+            if(p.status === "injured"){
+                statusIcon = `<span style="color:#ff4d4d;margin-left:6px;">✚</span>`;
+                div.style.opacity = "0.6";
+            }
+            else if(p.status === "suspended"){
+                statusIcon = `<span style="color:#ff9f43;margin-left:6px;">⛔</span>`;
+                div.style.opacity = "0.6";
+            }
+
+            div.innerHTML=`
+                <span>
+                    ${p.name}
+                    ${statusIcon}
+                </span>
+                <div class="delete">✖</div>
+            `;
+
+            div.querySelector("span").onclick=()=>{
+                state.view="playerDetail";
+                state.playerId=p.id;
+                render();
+            };
+
+            div.querySelector(".delete").onclick=()=>deletePlayer(p.id);
+
+           section.appendChild(div);
+        });
+            list.appendChild(section);
+    });
+}
+async function addPlayer(){
+
+const name=document.getElementById("playerName").value.trim();
+if(!name) return;
+
+const id = generateId();
+
+await setDoc(doc(db,"players",id),{
+    id,
+    name,
+    teamId: state.teamId,
+    leagueId: state.leagueId,
+    sportId: state.sportId,
+    position:"ATT",
+    status:"available",
+    stats:{
+        total:{
+            matches:0,
+            minutes:0,
+            goals:0,
+            assists:0,
+            starts:0,
+            subs:0
+        },
+        seasons:{}
+    }
+});
+
+render();
+}
+
+async function deletePlayer(id){
+
+if(!checkDeletePassword()) return;
+if(!confirm("Smazat hráče?")) return;
+
+await deleteDoc(doc(db,"players",id));
+
+render();
+}
+
+async function renderPlayerDetail(){
+
+const data=await getData();
+const sport=data.sports.find(s=>s.id===state.sportId);
+
+const snap = await getDoc(doc(db,"players",state.playerId));
+const player = snap.data();
+
+if(!player){
+goBack();
+return;
+}
+
+const total = player.stats?.total || {};
+const matches = total.matches || 0;
+
+const goalsPerMatch = matches ? (total.goals / matches).toFixed(2) : 0;
+const assistsPerMatch = matches ? (total.assists / matches).toFixed(2) : 0;
+const minutesPerMatch = matches ? (total.minutes / matches).toFixed(1) : 0;
+
+const app=document.getElementById("app");
+
+app.innerHTML=`
+<div class="back">← zpět</div>
+<h2>${player.name}</h2>
+
+<label>Pozice</label>
+<select id="position">
+<option value="GK">Brankář</option>
+<option value="DEF">Obránce</option>
+<option value="MID">Záložník</option>
+<option value="ATT">Útočník</option>
+</select>
+
+<label>Status</label>
+<select id="status">
+<option value="available">Dostupný</option>
+<option value="injured">Zraněný</option>
+<option value="suspended">Trest</option>
+</select>
+
+<button id="savePlayerBtn">Uložit</button>
+
+<hr style="margin:20px 0;opacity:0.2">
+
+<h3>Statistiky</h3>
+
+Zápasy: ${matches}<br>
+Minuty celkem: ${total.minutes || 0}<br>
+⚽ Góly: ${total.goals || 0}<br>
+🎯 Asistence: ${total.assists || 0}<br>
+🟨 Žluté: ${total.yellow || 0}<br>
+🟥 Červené: ${total.red || 0}<br>
+
+<hr style="margin:10px 0;opacity:0.2">
+
+⚽ Góly / zápas: ${goalsPerMatch}<br>
+🎯 Asistence / zápas: ${assistsPerMatch}<br>
+⏱ Minuty / zápas: ${minutesPerMatch}
+`;
+
+document.querySelector(".back").onclick = goBack;
+
+document.getElementById("position").value = player.position || "ATT";
+document.getElementById("status").value = player.status || "available";
+
+document.getElementById("savePlayerBtn").onclick = async ()=>{
+
+player.position=document.getElementById("position").value;
+player.status=document.getElementById("status").value;
+
+await setDoc(doc(db,"players",player.id),player);
+
+state.view="players";
+render();
+};
+
+}
+async function addTeam(){
+
+    const name=document.getElementById("teamName").value.trim();
+    if(!name) return;
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+    const league=sport.leagues.find(l=>l.id===state.leagueId);
+
+    const id = generateId();
+
+    await setDoc(doc(db,"teams",id),{
+    id,
+    name,
+    leagueId: league.id,
+    sportId: sport.id,
+    elo:1500
+});
+
+   document.getElementById("teamName").value = "";
+   render();
+}
+
+async function deleteTeam(id){
+
+    if(!checkDeletePassword()) return;
+    if(!confirm("Smazat tým?")) return;
+
+    await deleteDoc(doc(db,"teams",id));
+
+    render();
+}
+
+/* ================= BACK ================= */
+
+function goBack(){
+
+    if(state.view === "playerDetail"){
+        state.view = "players";
+        state.playerId = null;
+    }
+    else if(state.view === "players"){
+        state.view = "teams";
+        state.teamId = null;
+    }
+    else if(state.view === "teams"){
+    state.view = "leagueMenu";
+}
+
+else if(state.view === "referees"){
+    state.view = "leagueMenu";
+}
+    else if(state.view === "leagues"){
+        state.view = "sports";
+        state.sportId = null;
+    }
+else if(state.view === "leagueMenu"){
+    state.view = "leagues";
+    state.leagueId = null;
+}
+    render();
+}
+
+/* ================= START ================= */
+
+render();
+
+</script>
+</body>
+</html>
