@@ -167,8 +167,6 @@ where("userId","==",auth.currentUser.uid)
 
 const snap = await getDocs(q);
 
-
-
 let bets=0;
 let wins=0;
 let losses=0;
@@ -179,15 +177,42 @@ let totalProfit=0;
 let bankroll=0;
 let chartData=[];
 let labels=[];
-
 let index=1;
 
 for(const d of snap.docs){
 
 const bet = d.data();
 
-const matchSnap = await getDoc(doc(db,"matches", bet.matchId));
-const match = matchSnap.exists() ? matchSnap.data() : null;
+let match = null;
+
+// 🔥 NOVÁ STRUKTURA
+if(bet.leagueId){
+
+const matchSnap = await getDoc(
+doc(db,"matches", bet.leagueId, "list", bet.matchId)
+);
+
+match = matchSnap.exists() ? matchSnap.data() : null;
+
+}else{
+
+// fallback staré sázky
+const leaguesSnap = await getDocs(collection(db,"matches"));
+
+for(const leagueDoc of leaguesSnap.docs){
+
+const mSnap = await getDoc(
+doc(db,"matches", leagueDoc.id, "list", bet.matchId)
+);
+
+if(mSnap.exists()){
+match = mSnap.data();
+break;
+}
+
+}
+
+}
 
 const result = evaluateBet(bet,match);
 
