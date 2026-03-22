@@ -98,30 +98,37 @@ render();
 
 async function getUpcomingMatches(data){
 
-const snap = await getDocs(collection(db,"matches"));
-const allMatches = snap.docs.map(d=>d.data());
-
 let matches = [];
 
-data.sports?.forEach(sport=>{
-if(sport.name !== "Fotbal") return;
+for(const sport of (data.sports || [])){
+if(sport.name !== "Fotbal") continue;
 
-sport.leagues?.forEach(league=>{
+for(const league of (sport.leagues || [])){
 
-allMatches.forEach(match=>{
+const snap = await getDocs(
+collection(db,"matches", league.id, "list")
+);
+
+snap.forEach(docu => {
+
+const match = docu.data();
+
 if(
-match.leagueId === league.id &&
-(match.status === "scheduled" || match.status === "lineup" || !match.status)
+match.status === "scheduled" ||
+match.status === "lineup" ||
+!match.status
 ){
 matches.push({
 league: league,
 match: match
 });
 }
-});
 
 });
-});
+
+}
+
+}
 
 return matches;
 }
@@ -265,6 +272,9 @@ form.assistsPer90 * 3
 
 async function render(){
 
+const teamsSnap = await getDocs(collection(db,"teams"));
+const allTeams = teamsSnap.docs.map(d => d.data());
+
 const snap = await getDoc(doc(db,"appData","main"));
 const data = snap.data();
 
@@ -350,7 +360,7 @@ ${p.player.position}
 <span style="font-weight:500">${p.player.name}</span>
 
 <span style="opacity:0.6">
- – ${league.teams.find(t=>t.id===p.teamId)?.name}
+ – ${allTeams.find(t=>t.id===p.teamId)?.name || ""}
 </span>
 
 <span style="color:#aaa">
