@@ -364,6 +364,72 @@ async function renderLeagueMenu(){
     };
 }
 
+async function renderTeams(){
+
+    const data = await getData();
+    const sport = data.sports.find(s=>s.id===state.sportId);
+    const league = sport.leagues.find(l=>l.id===state.leagueId);
+
+    const app = document.getElementById("app");
+
+    app.innerHTML = `
+        <div class="back">← zpět</div>
+        <h2>Týmy – ${league.name}</h2>
+
+        <input id="teamName" placeholder="Nový tým">
+        <button id="addTeamBtn">Přidat tým</button>
+
+        <div id="list"></div>
+    `;
+
+    document.querySelector(".back").onclick = goBack;
+
+    document.getElementById("addTeamBtn").onclick = addTeam;
+
+    const snap = await getDocs(
+        query(
+            collection(db,"teams"),
+            where("leagueId","==",state.leagueId)
+        )
+    );
+
+    const teams = snap.docs.map(d=>d.data());
+
+    const list = document.getElementById("list");
+
+    teams
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+    .forEach(t=>{
+
+        const div = document.createElement("div");
+        div.className = "card";
+
+        div.innerHTML = `
+            <span>${t.name}</span>
+            <div class="delete">✖</div>
+        `;
+
+        div.querySelector("span").onclick = ()=>{
+            state.view = "players";
+            state.teamId = t.id;
+            render();
+        };
+
+        div.querySelector(".delete").onclick = async ()=>{
+
+            if(!confirm("Smazat tým?")) return;
+
+            await deleteDoc(doc(db,"teams",t.id));
+
+            render();
+        };
+
+        list.appendChild(div);
+    });
+
+}
+
 async function renderReferees(){
 
     const data=await getData();
