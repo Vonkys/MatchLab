@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fantasy</title>
+
+<style>
+
+body{
+margin:0;
+font-family:system-ui;
+background:#0b0b0b;
+color:white;
+display:none;
+}
+
+.topbar{
+padding:18px;
+text-align:center;
+background:#111;
+border-bottom:1px solid #222;
+}
+
+.container{
+max-width:420px;
+margin:auto;
+padding:20px;
+}
+
+.card{
+background:#1b1b1b;
+padding:15px;
+border-radius:12px;
+margin-top:15px;
+border:1px solid #7dffa0;
+}
+
+.tooltip{
+text-align:center;
+opacity:0.6;
+margin-top:10px;
+font-size:13px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<span onclick="window.location.href='index.html'" style="cursor:pointer">
+← Zpět
+</span>
+</div>
+
+<div class="tooltip">
+🏆 Fantasy sestava kola
+</div>
+
+<div class="container">
+
+<div id="app">
+Načítám...
+</div>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+authDomain: "matchlab-f7fb8.firebaseapp.com",
+projectId: "matchlab-f7fb8",
+storageBucket: "matchlab-f7fb8.firebasestorage.app",
+messagingSenderId: "791469272358",
+appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+onAuthStateChanged(auth,(user)=>{
+if(!user){
+window.location.href="login.html";
+return;
+}
+document.body.style.display="block";
+render();
+});
+
+async function getUpcomingMatches(data){
+
+const snap = await getDocs(collection(db,"matches"));
+const allMatches = snap.docs.map(d=>d.data());
+
+let matches = [];
+
+data.sports?.forEach(sport=>{
+if(sport.name !== "Fotbal") return;
+
+sport.leagues?.forEach(league=>{
+
+allMatches.forEach(match=>{
+if(
+match.leagueId === league.id &&
+(match.status === "scheduled" || match.status === "lineup" || !match.status)
+){
+matches.push({
+league: league,
+match: match
+});
+}
+});
+
+});
+});
+
+return matches;
+}
+
+async function getFantasyPlayers(matches){
+
+const snap = await getDocs(collection(db,"players"));
+const allPlayers = snap.docs.map(d=>d.data());
+
+let players = [];
+let added = new Set();
+
+matches.forEach(m=>{
+
+let squad = [
+...(m.match.homeLineup || []),
+...(m.match.awayLineup || [])
+];
+
+if(squad.length === 0){
+
+// fallback = poslední sestava z main
+squad = getLastLineup(m.league, m.match.homeTeam)
+.concat(getLastLineup(m.league, m.match.awayTeam));
+
+}
+
+// fallback = celý tým
+if(squad.length === 0){
+const teamPlayers = allPlayers.filter(p =>
+p.teamId === m.match.homeTeam ||
+p.teamId === m.match.awayTeam
+);
+squad = teamPlayers.map(p=>p.id);
+}
+
+squad.forEach(pid=>{
+
+const p = allPlayers.find(pl=>pl.id===pid);
+
+if(p && p.status === "available" && !added.has(p.id)){
+players.push({
+player:p,
+teamId:p.teamId,
+league:m.league
+});
+added.add(p.id);
+}
+
+});
+
+});
+
+return players;
+}
+
+function getLastLineup(league, teamId){
+
+let lineup = [];
+
+league.seasons?.forEach(season=>{
+season.rounds?.forEach(round=>{
+round.matches?.forEach(match=>{
+if(match.status !== "played") return;
+
+if(match.homeTeam === teamId && match.homeLineup?.length){
+lineup = match.homeLineup;
+}
+
+if(match.awayTeam === teamId && match.awayLineup?.length){
+lineup = match.awayLineup;
+}
+});
+});
+});
+
+return lineup;
+}
+
+function getPlayerLast7Stats(league, playerId){
+
+let matches = [];
+let minutes = 0;
+
+league.seasons?.forEach(season=>{
+season.rounds?.forEach(round=>{
+round.matches?.forEach(match=>{
+if(match.status !== "played") return;
+
+const ps = match.playerStats?.[playerId];
+if(ps){
+matches.push({
+date: match.date,
+stats: ps
+});
+}
+});
+});
+});
+
+matches = matches
+.sort((a,b)=> new Date(a.date) - new Date(b.date))
+.slice(-7);
+
+if(matches.length === 0) return null;
+
+let rating = 0;
+let goals = 0;
+let assists = 0;
+
+matches.forEach(m=>{
+rating += m.stats.rating || 0;
+goals += m.stats.goals || 0;
+assists += m.stats.assists || 0;
+minutes += m.stats.minutes || 0;
+});
+
+if(minutes < 30) return null;
+
+return {
+avgRating: rating / matches.length,
+goalsPer90: (goals / minutes) * 90,
+assistsPer90: (assists / minutes) * 90
+};
+}
+
+function getFantasyScore(player, league){
+
+const form = getPlayerLast7Stats(league, player.id);
+
+if(!form){
+return player.stats?.total?.avgRating || 6.5;
+}
+
+return (
+form.avgRating +
+form.goalsPer90 * 4 +
+form.assistsPer90 * 3
+);
+}
+
+async function render(){
+
+const snap = await getDoc(doc(db,"appData","main"));
+const data = snap.data();
+
+let html = "";
+
+const posColor = {
+GK:"#3498db",
+DEF:"#2ecc71",
+MID:"#f1c40f",
+ATT:"#e74c3c",
+FW:"#e74c3c"
+};
+
+for(const sport of (data.sports || [])){
+if(sport.name !== "Fotbal") continue;
+
+for(const league of (sport.leagues || [])){
+
+const matches = (await getUpcomingMatches(data))
+.filter(m => m.league.id === league.id);
+
+const fantasyPlayers = await getFantasyPlayers(matches);
+if(fantasyPlayers.length === 0) continue;
+
+let gk=[], df=[], mf=[], fw=[];
+
+fantasyPlayers.forEach(p=>{
+p.score = getFantasyScore(p.player, league);
+
+if(p.player.position === "GK") gk.push(p);
+else if(p.player.position === "DEF") df.push(p);
+else if(p.player.position === "MID") mf.push(p);
+else fw.push(p);
+});
+
+gk.sort((a,b)=>b.score-a.score);
+df.sort((a,b)=>b.score-a.score);
+mf.sort((a,b)=>b.score-a.score);
+fw.sort((a,b)=>b.score-a.score);
+
+const teamGK = gk.slice(0,1);
+const teamDF = df.slice(0,3);
+const teamMF = mf.slice(0,4);
+const teamFW = fw.slice(0,3);
+
+const benchGK = gk.slice(1,2);
+const benchDF = df.slice(3,5);
+const benchMF = mf.slice(4,6);
+const benchFW = fw.slice(3,5);
+
+const fantasyXI = [...teamGK,...teamDF,...teamMF,...teamFW];
+fantasyXI.sort((a,b)=>b.score-a.score);
+
+const captain = fantasyXI[0]?.player.id;
+
+html += `<div class="card">
+<div style="font-size:18px;font-weight:700;margin-bottom:12px;">
+⚽ ${league.name}
+</div>`;
+
+function renderGroup(title, arr){
+
+if(arr.length===0) return "";
+
+return `
+<div style="margin-top:12px;font-weight:600;opacity:0.9">${title}</div>
+${arr.map(p=>`
+<div style="margin-top:4px">
+
+<span style="
+display:inline-block;
+font-size:11px;
+padding:2px 6px;
+border-radius:4px;
+margin-right:6px;
+font-weight:700;
+background:${posColor[p.player.position]||"#888"};
+color:black;
+">
+${p.player.position}
+</span>
+
+<span style="font-weight:500">${p.player.name}</span>
+
+<span style="opacity:0.6">
+ – ${league.teams.find(t=>t.id===p.teamId)?.name}
+</span>
+
+<span style="color:#aaa">
+(${(p.player.stats?.total?.avgRating || 6.5).toFixed(2)})
+</span>
+
+${p.player.id===captain ? '<span style="color:#f7c948"> ⭐</span>' : ''}
+
+</div>
+`).join("")}
+`;
+}
+
+html += renderGroup("GK", teamGK);
+html += renderGroup("DEF", teamDF);
+html += renderGroup("MID", teamMF);
+html += renderGroup("FW", teamFW);
+
+html += `<div style="margin-top:16px;font-weight:600;opacity:0.7">
+🔁 Náhradníci
+</div>`;
+
+html += renderGroup("GK", benchGK);
+html += renderGroup("DEF", benchDF);
+html += renderGroup("MID", benchMF);
+html += renderGroup("FW", benchFW);
+
+html += `</div>`;
+
+}
+}
+
+document.getElementById("app").innerHTML = html;
+}
+
+</script>
+
+</body>
+</html>

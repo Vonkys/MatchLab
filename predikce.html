@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predikce</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#0b0b0b;
+    color:white;
+    display:none;
+}
+
+.topbar{
+    padding:18px;
+    text-align:center;
+    background:#111;
+    border-bottom:1px solid #222;
+}
+
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+    text-align:center;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    margin-top:20px;
+    border:none;
+    border-radius:10px;
+    background:#2b2b2b;
+    color:white;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#3a3a3a;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <span onclick="window.location.href='index.html'" style="cursor:pointer">
+        ← Zpět
+    </span>
+</div>
+
+<div class="container">
+    <h2></h2>
+    <div id="matchList" style="margin-top:20px;"></div>
+</div>
+
+</div>
+
+</body>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_bZAUiFIzQYrYTqdVkvF6GliLWbu7WN4",
+  authDomain: "matchlab-f7fb8.firebaseapp.com",
+  projectId: "matchlab-f7fb8",
+  storageBucket: "matchlab-f7fb8.firebasestorage.app",
+  messagingSenderId: "791469272358",
+  appId: "1:791469272358:web:3a3502f0b65d68bedb65e7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+onAuthStateChanged(auth,(user)=>{
+
+if(!user){
+window.location.href="login.html";
+return;
+}
+
+document.body.style.display="block";
+
+});
+
+async function loadUpcomingMatches(){
+
+    const mainSnap = await getDoc(doc(db,"appData","main"));
+    const mainData = mainSnap.data();
+
+    let matches = [];
+
+    // 🔥 projdeme všechny ligy a stáhneme jejich zápasy
+    for(const sport of (mainData.sports || [])){
+        for(const league of (sport.leagues || [])){
+
+            const snap = await getDocs(
+                collection(db,"matches",league.id,"list")
+            );
+
+            snap.forEach(d=>{
+                matches.push(d.data());
+            });
+
+        }
+    }
+
+    const list = document.getElementById("matchList");
+    list.innerHTML = "";
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    function findLeagueName(id){
+        let name=id;
+        mainData.sports?.forEach(s=>{
+            s.leagues?.forEach(l=>{
+                if(l.id===id) name=l.name;
+            });
+        });
+        return name;
+    }
+
+    function findTeamName(id){
+        let name=id;
+        mainData.sports?.forEach(s=>{
+            s.leagues?.forEach(l=>{
+                l.teams?.forEach(t=>{
+                    if(t.id===id) name=t.name;
+                });
+            });
+        });
+        return name;
+    }
+
+    let upcoming=[];
+
+    matches.forEach(match=>{
+
+        if(match.status !== "scheduled") return;
+        if(!match.date) return;
+
+        const d=new Date(match.date);
+        d.setHours(0,0,0,0);
+
+        if(d>=today){
+
+            upcoming.push({
+                match,
+                league:{name: findLeagueName(match.leagueId)},
+                home:{name: findTeamName(match.homeTeam)},
+                away:{name: findTeamName(match.awayTeam)}
+            });
+
+        }
+
+    });
+
+    upcoming.sort((a,b)=> new Date(a.match.date)-new Date(b.match.date));
+
+    if(upcoming.length===0){
+        list.innerHTML="<p style='opacity:0.6'>Žádné budoucí zápasy</p>";
+        return;
+    }
+
+    let leagues={};
+
+    upcoming.forEach(item=>{
+        if(!leagues[item.league.name]) leagues[item.league.name]=[];
+        leagues[item.league.name].push(item);
+    });
+
+    Object.keys(leagues).forEach(leagueName=>{
+
+        const header=document.createElement("div");
+        header.style.margin="40px 0 15px 0";
+        header.style.fontSize="20px";
+        header.style.fontWeight="700";
+        header.style.letterSpacing="2px";
+        header.style.textAlign="center";
+        header.style.opacity="0.9";
+        header.style.color="#7dffa0";
+        header.innerText=leagueName.toUpperCase();
+
+        list.appendChild(header);
+
+        leagues[leagueName].forEach(item=>{
+
+            const card=document.createElement("div");
+            card.style.background="linear-gradient(145deg,#1b1b1b,#101010)";
+            card.style.padding="16px";
+            card.style.borderRadius="14px";
+            card.style.marginBottom="12px";
+            card.style.cursor="pointer";
+            card.style.border="1px solid rgba(255,255,255,0.06)";
+
+            card.innerHTML=`
+                <div style="font-weight:600;font-size:17px;">
+                    ${item.home.name}
+                    <span style="opacity:0.5">vs</span>
+                    ${item.away.name}
+                </div>
+                <div style="font-size:12px;opacity:0.6;margin-top:6px;">
+                    ${item.match.date}
+                </div>
+            `;
+
+            card.onclick=()=>{
+                window.location.href =
+                "predictionDetail.html?id="+item.match.id+
+                "&league="+item.match.leagueId;
+            };
+
+            list.appendChild(card);
+
+        });
+
+    });
+
+}
+    
+
+
+    
+
+
+
+loadUpcomingMatches();
+
+</script>
+</html>
