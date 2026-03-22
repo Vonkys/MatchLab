@@ -124,306 +124,441 @@ document.body.style.display="block";
 
 });
 
+async function loadPlayers(){
 
-async function loadPlayers() {
-  console.log("Načítám hráče...");  // Přidáno pro debugování
+    const snap = await getDoc(doc(db,"appData","main"));
+    const data = snap.data();
 
-  const snap = await getDoc(doc(db, "appData", "main"));
-  const data = snap.data();
-  console.log("Načtená data z appData:", data);  // Přidáno pro debugování
+    const leagueId = getLeagueId();
 
-  const leagueId = getLeagueId();
-  console.log("ID ligy:", leagueId);  // Přidáno pro debugování
+let league = null;
+window.sportName = "";
 
-  let league = null;
-  window.sportName = "";
-
-  data.sports.forEach(s => {
-    s.leagues?.forEach(l => {
-      if (l.id === leagueId) {
-        league = l;
-        window.sportName = s.name;
-      }
+data.sports.forEach(s=>{
+    s.leagues?.forEach(l=>{
+        if(l.id === leagueId){
+            league = l;
+            window.sportName = s.name;
+        }
     });
-  });
+});
 
-  if (!league) {
+if(!league){
     document.getElementById("leagueTitle").textContent = "Liga nenalezena";
     return;
-  }
-
-  console.log("Načtená liga:", league);  // Přidáno pro debugování
-
-  const season = league.seasons?.at(-1);
-  if (!season) {
-    document.getElementById("table").innerHTML = "<tr><td>Žádná sezóna</td></tr>";
-    return;
-  }
-
-  const seasonId = season.id;
-  console.log("Sezóna ID:", seasonId);  // Přidáno pro debugování
-
-  window.rows = [];
-  let rows = window.rows;
-
-  const snapPlayers = await getDocs(collection(db, "players"));
-  console.log("Načtení hráčů z kolekce players...");  // Přidáno pro debugování
-  const allPlayers = snapPlayers.docs.map(d => d.data());
-  console.log("Načtení hráčů:", allPlayers);  // Přidáno pro debugování
-
-  league.teams.forEach(team => {
-    const teamPlayers = allPlayers.filter(p => p.teamId === team.id);
-    console.log("Hráči týmu", team.name, teamPlayers);  // Přidáno pro debugování
-
-    teamPlayers.forEach(player => {
-      const stats = player.stats?.total;
-      if (!stats) return;
-
-      if ((stats.matches || 0) === 0) return;
-
-      if (window.sportName === "Hokej") {
-        // Brankáři
-        if (player.position === "GK") {
-          rows.push({
-            name: player.name,
-            team: team.name,
-            position: "GK",
-            matches: stats.matches,
-            minutes: stats.minutes || 0,
-            saves: stats.saves || 0,
-            shotsAgainst: stats.shotsAgainst || 0,
-            savePct: (stats.shotsAgainst || 0) > 0
-              ? ((stats.saves / stats.shotsAgainst) * 100).toFixed(1)
-              : 0
-          });
-        } else {
-          // Hokejoví hráči
-          rows.push({
-            name: player.name,
-            team: team.name,
-            position: player.position || "ATT",
-            matches: stats.matches,
-            minutes: stats.minutes || 0,
-            goals: stats.goals || 0,
-            assists: stats.assists || 0,
-            points: (stats.goals || 0) + (stats.assists || 0),
-            plusMinus: stats.plusMinus || 0,
-            shots: stats.shots || 0,
-            penaltyMinutes: stats.penaltyMinutes || 0,
-            faceoffsTotal: stats.faceoffsTotal || 0,
-            faceoffsWon: stats.faceoffsWon || 0,
-            faceoffPct: (stats.faceoffsTotal || 0) > 0
-              ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
-              : 0,
-            shootouts: stats.shootouts || 0,
-            shootoutGoals: stats.shootoutGoals || 0,
-            shootoutPct: (Number(stats.shootouts) || 0) > 0
-              ? ((Number(stats.shootoutGoals || 0) / Number(stats.shootouts)) * 100).toFixed(0)
-              : 0
-          });
-        }
-      } else {
-        // Fotbal
-        rows.push({
-          name: player.name,
-          team: team.name,
-          position: player.position || "ATT",
-          matches: stats.matches,
-          minutes: stats.minutes || 0,
-          goals: stats.goals || 0,
-          assists: stats.assists || 0,
-          yellow: stats.yellow || 0,
-          red: stats.red || 0,
-          passes: stats.passesTotal || 0,
-          passesCompleted: stats.passesMade || 0,
-          passAccuracy: (stats.passesTotal || 0) > 0
-            ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
-            : 0,
-          xgPer90: stats.minutes > 0
-            ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
-            : 0,
-          avgRating: player.stats?.total?.avgRating || 0,
-          goalsPer90: stats.minutes > 0
-            ? ((stats.goals / stats.minutes) * 90).toFixed(2)
-            : 0
-        });
-      }
-    });
-  });
-
-  console.log("Seznam hráčů k zobrazení:", rows);  // Přidáno pro debugování
-
-  renderTable(window.rows);
 }
 
-// Barvy pro pozice hráčů
-const positionColors = {
-  GK: "#3498db",
-  DEF: "#2ecc71",
-  MID: "#f1c40f",
-  ATT: "#e74c3c"
-};
+    document.getElementById("leagueTitle").textContent =
+        `Statistiky hráčů – ${league.name}`;
 
-function renderTable(rows) {
-  const table = document.getElementById("table");
-  let html = "";
-  if (window.sportName === "Hokej") {
-    html = `
-      <tr>
-        <th>#</th>
-        <th class="player">Brankář</th>
-        <th onclick="sortBy('team')">Tým</th>
-        <th onclick="sortBy('matches')">Z</th>
-        <th onclick="sortBy('minutes')">TOI</th>
-        <th onclick="sortBy('saves')">Zák</th>
-        <th onclick="sortBy('shotsAgainst')">Stř</th>
-        <th onclick="sortBy('savePct')">SV%</th>
-      </tr>
-    `;
-    rows
-      .filter(r => r.saves !== undefined)
-      .forEach((r, i) => {
-        html += `
-          <tr>
-            <td>${i + 1}</td>
-            <td class="player">
-              <span class="position" style="background:${positionColors[r.position]}">
-                GK
-              </span>
-              ${r.name}
-            </td>
-            <td class="team">${r.team}</td>
-            <td>${r.matches}</td>
-            <td>${Math.floor(r.minutes / 60) + ":" + String(r.minutes % 60).padStart(2, "0")}</td>
-            <td>${r.saves}</td>
-            <td>${r.shotsAgainst}</td>
-            <td><b>${r.savePct}%</b></td>
-          </tr>
-        `;
-      });
-
-    html += `
-      <tr>
-        <th>#</th>
-        <th class="player">Hráč</th>
-        <th onclick="sortBy('team')">Tým</th>
-        <th onclick="sortBy('matches')">Z</th>
-        <th onclick="sortBy('minutes')">TOI</th>
-        <th onclick="sortBy('goals')">G</th>
-        <th onclick="sortBy('assists')">A</th>
-        <th onclick="sortBy('points')">B</th>
-        <th onclick="sortBy('plusMinus')">+/-</th>
-        <th onclick="sortBy('shots')">Stř</th>
-        <th onclick="sortBy('penaltyMinutes')">TM</th>
-        <th onclick="sortBy('faceoffsTotal')">Buly</th>
-        <th onclick="sortBy('faceoffsWon')">Buly OK</th>
-        <th onclick="sortBy('faceoffPct')">Buly %</th>
-        <th onclick="sortBy('shootouts')">Náj</th>
-        <th onclick="sortBy('shootoutGoals')">G Náj</th>
-        <th onclick="sortBy('shootoutPct')">% Náj</th>
-      </tr>
-    `;
-
-    rows
-      .filter(r => r.points !== undefined)
-      .forEach((r, i) => {
-        html += `
-          <tr>
-            <td>${i + 1}</td>
-            <td class="player">
-              <span class="position" style="background:${positionColors[r.position]}">
-                ${r.position}
-              </span>
-              ${r.name}
-            </td>
-            <td class="team">${r.team}</td>
-            <td>${r.matches}</td>
-            <td>${Math.floor(r.minutes / 60) + ":" + String(r.minutes % 60).padStart(2, "0")}</td>
-            <td><b>${r.goals}</b></td>
-            <td>${r.assists}</td>
-            <td><b>${r.points}</b></td>
-            <td>${r.plusMinus}</td>
-            <td>${r.shots}</td>
-            <td>${r.penaltyMinutes}</td>
-            <td>${r.faceoffsTotal}</td>
-            <td>${r.faceoffsWon}</td>
-            <td>${r.faceoffPct}%</td>
-            <td>${r.shootouts}</td>
-            <td>${r.shootoutGoals}</td>
-            <td>${r.shootoutPct}%</td>
-          </tr>
-        `;
-      });
-  } else {
-    html = `
-      <tr>
-        <th>#</th>
-        <th class="player">Hráč</th>
-        <th onclick="sortBy('team')">Tým</th>
-        <th onclick="sortBy('avgRating')">⭐</th>
-        <th onclick="sortBy('matches')">Z</th>
-        <th onclick="sortBy('minutes')">Min</th>
-        <th onclick="sortBy('goals')">G</th>
-        <th onclick="sortBy('assists')">A</th>
-        <th onclick="sortBy('yellow')">🟨</th>
-        <th onclick="sortBy('red')">🟥</th>
-        <th onclick="sortBy('goalsPer90')">G/90</th>
-        <th onclick="sortBy('passes')">Přihr.</th>
-        <th onclick="sortBy('passesCompleted')">Přihr.OK</th>
-        <th onclick="sortBy('passAccuracy')">%</th>
-        <th onclick="sortBy('xgPer90')">xG/90</th>
-      </tr>
-    `;
-  }
-
-  if (window.sportName !== "Hokej") {
-    rows.forEach((r, i) => {
-      if (r.points !== undefined) {
-        html += `
-          <tr>
-            <td>${i + 1}</td>
-            <td class="player">
-              <span class="position" style="background:${positionColors[r.position]}">
-                ${r.position}
-              </span>
-              ${r.name}
-            </td>
-            <td class="team">${r.team}</td>
-            <td>${r.matches}</td>
-            <td>${Math.floor(r.minutes / 60) + ":" + String(r.minutes % 60).padStart(2, "0")}</td>
-            <td><b>${r.goals}</b></td>
-            <td>${r.assists}</td>
-            <td><b>${r.points}</b></td>
-            <td>${r.plusMinus}</td>
-            <td>${r.shots}</td>
-            <td>${r.penaltyMinutes}</td>
-            <td>${r.faceoffsTotal}</td>
-            <td>${r.faceoffsWon}</td>
-            <td>${r.faceoffPct}%</td>
-          </tr>
-        `;
-      }
-    });
-  }
-
-  table.innerHTML = html;
-}
-
-window.sortBy = function (field) {
-  window.rows.sort((a, b) => {
-    const A = a[field];
-    const B = b[field];
-    if (typeof A === "string" && isNaN(A)) {
-      return A.localeCompare(B);
+    const season = league.seasons?.at(-1);
+    if(!season){
+        document.getElementById("table").innerHTML =
+            "<tr><td>Žádná sezóna</td></tr>";
+        return;
     }
-    return Number(B) - Number(A);
-  });
-  renderTable(window.rows);
+
+    const seasonId = season.id;
+
+   window.rows = [];
+let rows = window.rows;
+
+const snapTeams = await getDocs(collection(db,"teams"));
+const allTeams = snapTeams.docs.map(d=>d.data());
+
+const leagueTeams = allTeams.filter(t => t.leagueId === leagueId);
+
+const snapPlayers = await getDocs(collection(db,"players"));
+const allPlayers = snapPlayers.docs.map(d=>d.data());
+
+allPlayers.forEach(player=>{
+
+const team = leagueTeams.find(t => t.id === player.teamId);
+if(!team) return;
+
+const stats = player.stats?.total;
+if(!stats) return;
+if(!stats.matches) return;
+
+
+if(window.sportName === "Hokej"){
+
+// ===== BRANKÁŘ =====
+if(player.position === "GK"){
+
+rows.push({
+    name:player.name,
+    team:team.name,
+    position:"GK",
+    matches:stats.matches,
+    minutes:stats.minutes || 0,
+    saves:stats.saves || 0,
+    shotsAgainst:stats.shotsAgainst || 0,
+    savePct:(stats.shotsAgainst || 0) > 0
+        ? ((stats.saves / stats.shotsAgainst) * 100).toFixed(1)
+        : 0
+});
+
+}
+
+// ===== HRÁČI =====
+else{
+
+rows.push({
+    name:player.name,
+    team:team.name,
+    position:player.position || "ATT",
+    matches:stats.matches,
+    minutes:stats.minutes || 0,
+    goals:stats.goals || 0,
+    assists:stats.assists || 0,
+    points:(stats.goals || 0) + (stats.assists || 0),
+    plusMinus:stats.plusMinus || 0,
+    shots:stats.shots || 0,
+    penaltyMinutes:stats.penaltyMinutes || 0,
+    faceoffsTotal:stats.faceoffsTotal || 0,
+    faceoffsWon:stats.faceoffsWon || 0,
+    faceoffPct:(stats.faceoffsTotal || 0) > 0
+        ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
+        : 0,
+
+    shootouts: stats.shootouts || 0,
+    shootoutGoals: stats.shootoutGoals || 0,
+    shootoutPct: (Number(stats.shootouts) || 0) > 0
+    ? ((Number(stats.shootoutGoals || 0) / Number(stats.shootouts)) * 100).toFixed(0)
+    : 0
+});
+
+}
+
+
+
+}else{
+
+rows.push({
+    name:player.name,
+    team:team.name,
+    position:player.position || "ATT",
+    matches:stats.matches,
+    minutes:stats.minutes || 0,
+    goals:stats.goals || 0,
+    assists:stats.assists || 0,
+    yellow:stats.yellow || 0,
+    red:stats.red || 0,
+
+    passes: stats.passesTotal || 0,
+    passesCompleted: stats.passesMade || 0,
+    passAccuracy: (stats.passesTotal || 0) > 0
+        ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
+        : 0,
+
+    xgPer90: stats.minutes > 0
+        ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
+        : 0,
+
+    avgRating: player.stats?.total?.avgRating || 0,
+
+    goalsPer90: stats.minutes > 0
+        ? ((stats.goals / stats.minutes) * 90).toFixed(2)
+        : 0
+});
+
+}
+
+        });
+
+    
+
+   // 🔥 řazení
+
+if(window.sportName === "Hokej"){
+
+rows.sort((a,b)=>{
+
+// brankáři vždy dole
+if(a.position === "GK" && b.position !== "GK") return 1;
+if(b.position === "GK" && a.position !== "GK") return -1;
+
+if(b.points !== a.points)
+return b.points - a.points;
+
+if(b.goals !== a.goals)
+return b.goals - a.goals;
+
+return b.assists - a.assists;
+
+});
+
+}else{
+
+rows.sort((a,b)=>{
+
+if(b.avgRating !== a.avgRating)
+return b.avgRating - a.avgRating;
+
+if(b.goals !== a.goals)
+return b.goals - a.goals;
+
+return b.assists - a.assists;
+
+});
+
+}
+
+    renderTable(window.rows);
+
+}
+const positionColors = {
+    GK:"#3498db",
+    DEF:"#2ecc71",
+    MID:"#f1c40f",
+    ATT:"#e74c3c"
 };
+
+
+function renderTable(rows){
+
+    const table = document.getElementById("table");
+let html = "";
+  if(window.sportName === "Hokej"){
+
+html = `
+<tr>
+<th>#</th>
+<th class="player">Brankář</th>
+<th onclick="sortBy('team')">Tým</th>
+<th onclick="sortBy('matches')">Z</th>
+<th onclick="sortBy('minutes')">TOI</th>
+<th onclick="sortBy('saves')">Zák</th>
+<th onclick="sortBy('shotsAgainst')">Stř</th>
+<th onclick="sortBy('savePct')">SV%</th>
+</tr>
+`;
+
+rows
+.filter(r => r.saves !== undefined)
+.forEach((r,i)=>{
+
+html += `
+<tr>
+<td>${i+1}</td>
+
+<td class="player">
+<span class="position" style="background:${positionColors[r.position]}">
+GK
+</span>
+${r.name}
+</td>
+
+<td class="team">${r.team}</td>
+<td>${r.matches}</td>
+
+<td>${Math.floor(r.minutes/60)+":"+String(r.minutes%60).padStart(2,"0")}</td>
+
+<td>${r.saves}</td>
+<td>${r.shotsAgainst}</td>
+<td><b>${r.savePct}%</b></td>
+
+</tr>
+`;
+
+});
+
+html += `
+<tr>
+<th>#</th>
+<th class="player">Hráč</th>
+<th onclick="sortBy('team')">Tým</th>
+<th onclick="sortBy('matches')">Z</th>
+<th onclick="sortBy('minutes')">TOI</th>
+<th onclick="sortBy('goals')">G</th>
+<th onclick="sortBy('assists')">A</th>
+<th onclick="sortBy('points')">B</th>
+<th onclick="sortBy('plusMinus')">+/-</th>
+<th onclick="sortBy('shots')">Stř</th>
+<th onclick="sortBy('penaltyMinutes')">TM</th>
+<th onclick="sortBy('faceoffsTotal')">Buly</th>
+<th onclick="sortBy('faceoffsWon')">Buly OK</th>
+<th onclick="sortBy('faceoffPct')">Buly %</th>
+<th onclick="sortBy('shootouts')">Náj</th>
+<th onclick="sortBy('shootoutGoals')">G Náj</th>
+<th onclick="sortBy('shootoutPct')">% Náj</th>
+</tr>
+`;
+
+rows
+.filter(r => r.points !== undefined)
+.forEach((r,i)=>{
+
+html += `
+<tr>
+
+<td>${i+1}</td>
+
+<td class="player">
+<span class="position" style="background:${positionColors[r.position]}">
+${r.position}
+</span>
+${r.name}
+</td>
+
+<td class="team">${r.team}</td>
+<td>${r.matches}</td>
+
+<td>${Math.floor(r.minutes/60)+":"+String(r.minutes%60).padStart(2,"0")}</td>
+
+<td><b>${r.goals}</b></td>
+<td>${r.assists}</td>
+<td><b>${r.points}</b></td>
+<td>${r.plusMinus}</td>
+<td>${r.shots}</td>
+<td>${r.penaltyMinutes}</td>
+<td>${r.faceoffsTotal}</td>
+<td>${r.faceoffsWon}</td>
+<td>${r.faceoffPct}%</td>
+<td>${r.shootouts}</td>
+<td>${r.shootoutGoals}</td>
+<td>${r.shootoutPct}%</td>
+
+</tr>
+`;
+
+});
+
+}
+
+
+
+else{
+
+html = `
+<tr>
+<th>#</th>
+<th class="player">Hráč</th>
+<th onclick="sortBy('team')">Tým</th>
+<th onclick="sortBy('avgRating')">⭐</th>
+<th onclick="sortBy('matches')">Z</th>
+<th onclick="sortBy('minutes')">Min</th>
+<th onclick="sortBy('goals')">G</th>
+<th onclick="sortBy('assists')">A</th>
+<th onclick="sortBy('yellow')">🟨</th>
+<th onclick="sortBy('red')">🟥</th>
+<th onclick="sortBy('goalsPer90')">G/90</th>
+<th onclick="sortBy('passes')">Přihr.</th>
+<th onclick="sortBy('passesCompleted')">Přihr.OK</th>
+<th onclick="sortBy('passAccuracy')">%</th>
+<th onclick="sortBy('xgPer90')">xG/90</th>
+</tr>
+`;
+
+}
+   
+
+if(window.sportName !== "Hokej"){
+rows.forEach((r,i)=>{
+
+
+
+
+
+// ===== HOKEJ HRÁČ =====
+if(r.points !== undefined){
+
+html += `
+<tr>
+<td>${i+1}</td>
+
+<td class="player">
+<span class="position"
+style="background:${positionColors[r.position]}">
+${r.position}
+</span>
+${r.name}
+</td>
+
+<td class="team">${r.team}</td>
+<td>${r.matches}</td>
+
+<td>${
+Math.floor(r.minutes/60) + ":" + String(r.minutes%60).padStart(2,"0")
+}</td>
+
+<td><b>${r.goals}</b></td>
+<td>${r.assists}</td>
+<td><b>${r.points}</b></td>
+<td>${r.plusMinus}</td>
+<td>${r.shots}</td>
+<td>${r.penaltyMinutes}</td>
+<td>${r.faceoffsTotal}</td>
+<td>${r.faceoffsWon}</td>
+<td>${r.faceoffPct}%</td>
+
+</tr>
+`;
+
+}
+
+// ===== FOTBAL =====
+else{
+
+html += `
+<tr>
+
+<td>${i+1}</td>
+
+<td class="player">
+<span class="position"
+style="background:${positionColors[r.position]}">
+${r.position}
+</span>
+${r.name}
+</td>
+
+<td class="team">${r.team}</td>
+<td><b>${r.avgRating.toFixed(2)}</b></td>
+<td>${r.matches}</td>
+<td>${r.minutes}</td>
+<td><b>${r.goals}</b></td>
+<td>${r.assists}</td>
+<td>${r.yellow}</td>
+<td>${r.red}</td>
+<td>${r.goalsPer90}</td>
+<td>${r.passes}</td>
+<td>${r.passesCompleted}</td>
+<td>${r.passAccuracy}%</td>
+<td>${r.xgPer90}</td>
+
+</tr>
+`;
+
+}
+
+});
+}
+table.innerHTML = html;
+}
+
+window.sortBy = function(field){
+
+    window.rows.sort((a,b)=>{
+
+        const A = a[field];
+        const B = b[field];
+
+        // pokud je text (např tým)
+        if(typeof A === "string" && isNaN(A)){
+            return A.localeCompare(B);
+        }
+
+        // jinak čísla
+        return Number(B) - Number(A);
+    });
+
+    renderTable(window.rows);
+}
 
 loadPlayers();
 
 </script>
-
 </body>
-</html> 
+</html>
