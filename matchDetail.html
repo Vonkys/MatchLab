@@ -267,8 +267,7 @@ match.shootoutWinner = null;
 
 }
   
-
-    match.status = "played";
+match.status = "played";
 }
 
 
@@ -473,6 +472,7 @@ awayTeam.elo = Math.round(awayElo + K * (resultAway - expectedAway));
 
 }
 
+
 async function recomputeStatsForPlayers(playerIds, leagueId){
 
 const matchesSnap = await getDocs(
@@ -483,27 +483,25 @@ let totals = {};
 
 playerIds.forEach(pid=>{
 totals[pid] = {
- matches:0,
- minutes:0,
- goals:0,
- assists:0,
- shots:0,
-
- // ⭐ fotbal
- yellow:0,
- red:0,
- xg:0,
- passesMade:0,
- passesTotal:0,
- ratingSum:0,
-
- // ⭐ HOKEJ NOVÉ
- plusMinus:0,
- penaltyMinutes:0,
- faceoffsTotal:0,
- faceoffsWon:0,
- saves:0,
- shotsAgainst:0
+matches:0,
+minutes:0,
+goals:0,
+assists:0,
+shots:0,
+yellow:0,
+red:0,
+xg:0,
+passesMade:0,
+passesTotal:0,
+ratingSum:0,
+plusMinus:0,
+penaltyMinutes:0,
+faceoffsTotal:0,
+faceoffsWon:0,
+saves:0,
+shotsAgainst:0,
+shootoutAttempts:0,
+shootoutGoals:0,
 };
 });
 
@@ -520,6 +518,21 @@ if(!s) return;
 
 let t = totals[pid];
 
+// ⭐ nájezdy
+if(m.shootout && m.shootoutLog){
+m.shootoutLog.forEach(r=>{
+if(r.home?.playerId === pid){
+t.shootoutAttempts++;
+if(r.home.goal) t.shootoutGoals++;
+}
+if(r.away?.playerId === pid){
+t.shootoutAttempts++;
+if(r.away.goal) t.shootoutGoals++;
+}
+});
+}
+
+// ⭐ klasické stats
 if((s.minutes||0)>0) t.matches++;
 t.minutes += s.minutes || 0;
 t.goals += s.goals || 0;
@@ -530,7 +543,7 @@ t.shots += s.shots || 0;
 t.xg += s.xg || 0;
 t.passesMade += s.passesMade || 0;
 t.passesTotal += s.passesTotal || 0;
-// ⭐ HOKEJ
+
 t.plusMinus += s.plusMinus || 0;
 t.penaltyMinutes += s.penaltyMinutes || 0;
 t.faceoffsTotal += s.faceoffsTotal || 0;
@@ -538,7 +551,7 @@ t.faceoffsWon += s.faceoffsWon || 0;
 t.saves += s.saves || 0;
 t.shotsAgainst += s.shotsAgainst || 0;
 
-if(s.rating!==undefined){
+if(s.rating !== undefined){
 t.ratingSum += s.rating;
 }
 
@@ -558,19 +571,10 @@ let player = snap.data();
 let t = totals[pid];
 
 t.avgRating = t.matches>0 ? t.ratingSum/t.matches : 0;
-t.passSuccess = t.passesTotal>0
-? (t.passesMade/t.passesTotal)*100
-: 0;
-
-// ⭐ buly %
-t.faceoffPct = t.faceoffsTotal>0
-? (t.faceoffsWon / t.faceoffsTotal) * 100
-: 0;
-
-// ⭐ save %
-t.savePct = t.shotsAgainst>0
-? (t.saves / t.shotsAgainst) * 100
-: 0;
+t.passSuccess = t.passesTotal>0 ? (t.passesMade/t.passesTotal)*100 : 0;
+t.faceoffPct = t.faceoffsTotal>0 ? (t.faceoffsWon/t.faceoffsTotal)*100 : 0;
+t.savePct = t.shotsAgainst>0 ? (t.saves/t.shotsAgainst)*100 : 0;
+t.shootoutPct = t.shootoutAttempts>0 ? (t.shootoutGoals/t.shootoutAttempts)*100 : 0;
 
 if(!player.stats) player.stats = {};
 player.stats.total = t;
@@ -582,6 +586,8 @@ batch.set(ref, player);
 await batch.commit();
 
 }
+
+
 
 async function render(){
 
@@ -1026,7 +1032,10 @@ stats.goalsOT !== undefined
 }
    
    
-    match.playerStats[playerId] = stats;
+    match.playerStats[playerId] = {
+    ...(match.playerStats[playerId] || {}),
+    ...stats
+};
 
 }else{
     delete match.playerStats[playerId];
@@ -1035,6 +1044,7 @@ stats.goalsOT !== undefined
     });
 
   calculateScore(match);
+
 
 await saveMatchToNewStructure(match, league, sport);
 
