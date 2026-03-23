@@ -753,12 +753,21 @@ Object.keys(seasons)
             info.style.flex="1";
             info.style.textAlign="center";
 
-            info.innerHTML = `
-            <strong>
-            ${homeName} ${match.homeScore ?? "-"}:${match.awayScore ?? "-"}${halfText} ${awayName}
-            </strong>
-            <div style="font-size:13px;color:#aaa">${match.date}</div>
-            `;
+            let resultText = "";
+
+if(match.shootout){
+resultText = " SO";
+}
+else if(match.overtime){
+resultText = " OT";
+}
+
+info.innerHTML = `
+<strong>
+${homeName} ${match.homeScore ?? "-"}:${match.awayScore ?? "-"}${resultText}${halfText} ${awayName}
+</strong>
+<div style="font-size:13px;color:#aaa">${match.date}</div>
+`;
 
             info.onclick = ()=>{
                 window.location.href =
