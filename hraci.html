@@ -222,11 +222,11 @@ rows.push({
         ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
         : 0,
 
-    shootouts: stats.shootouts || 0,
-    shootoutGoals: stats.shootoutGoals || 0,
-    shootoutPct: (Number(stats.shootouts) || 0) > 0
-    ? ((Number(stats.shootoutGoals || 0) / Number(stats.shootouts)) * 100).toFixed(0)
-    : 0
+    shootouts: stats.shootoutAttempts || 0,
+shootoutGoals: stats.shootoutGoals || 0,
+shootoutPct: (Number(stats.shootoutAttempts) || 0) > 0
+? ((Number(stats.shootoutGoals || 0) / Number(stats.shootoutAttempts)) * 100).toFixed(0)
+: 0
 });
 
 }
