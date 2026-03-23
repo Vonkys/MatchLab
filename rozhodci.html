@@ -64,7 +64,7 @@ th{
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, getDocs, query, where }
+import { getFirestore, doc, getDoc, collection, getDocs }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -167,41 +167,30 @@ playedMatches.push(m);
 
     });
 
-    let rows = [];
+   let rows = [];
 
-    // 🔥 načti referees z nové kolekce
-const refsSnap = await getDocs(
-query(
-collection(db,"referees"),
-where("leagueId","==",leagueId)
-)
+// 🔥 načtení rozhodčích z Firestore kolekce
+const refSnap = await getDocs(
+collection(db,"referees")
 );
 
-const referees = refsSnap.docs.map(d=>d.data());
+const referees = refSnap.docs
+.map(d => d.data())
+.filter(r => r.leagueId === leagueId);
 
-referees.forEach(ref=>{
+referees.forEach(ref => {
 
-const stats = refStats[ref.id];
-if(!stats){
-rows.push({
-name:ref.name,
-matches:0,
-yellow:0,
-red:0,
-yellowAvg:"0.00",
-redAvg:"0.00"
-});
-return;
-}
+    const stats = refStats[ref.id];
+    if(!stats) return;
 
-rows.push({
-name:ref.name,
-matches:stats.matches,
-yellow:stats.yellow,
-red:stats.red,
-yellowAvg:(stats.yellow / stats.matches).toFixed(2),
-redAvg:(stats.red / stats.matches).toFixed(2)
-});
+    rows.push({
+        name: ref.name,
+        matches: stats.matches,
+        yellow: stats.yellow,
+        red: stats.red,
+        yellowAvg: (stats.yellow / stats.matches).toFixed(2),
+        redAvg: (stats.red / stats.matches).toFixed(2)
+    });
 
 });
 
