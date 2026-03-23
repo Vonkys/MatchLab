@@ -1234,20 +1234,20 @@ fields=[
     input.type="number";
 }
             
-            if(sport.name === "Hokej" && f.key === "minutes"){
+if(sport.name === "Hokej" && f.key === "minutes"){
 
 input.onblur = ()=>{
 
 let raw = input.value.trim();
-
 if(!raw) return;
 
-// povolíme 18,57 nebo 18.57
-raw = raw.replace(",", ":").replace(".", ":");
+// 🔥 dovolí 30,21 30.21 3021 5
+raw = raw.replace(",",":").replace(".",":");
 
 if(raw.includes(":")){
 
 let parts = raw.split(":");
+
 let min = Number(parts[0]) || 0;
 let sec = Number(parts[1]) || 0;
 
@@ -1266,9 +1266,14 @@ sec = Math.min(sec,59);
 input.value = min + ":" + String(sec).padStart(2,"0");
 
 }
+else{
+
+let min = Number(raw) || 0;
+input.value = min + ":00";
+
+}
 
 };
-
 }
             
             if(f.step) input.step=f.step;
