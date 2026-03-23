@@ -82,7 +82,7 @@ input:focus{
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where }
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, writeBatch }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -149,7 +149,8 @@ refereeId: match.refereeId || null,
 
 overtime: match.overtime || false,
 shootout: match.shootout || false,
-shootoutLog: match.shootoutLog || []
+shootoutLog: match.shootoutLog || [],
+
 };
 
 await setDoc(
@@ -270,243 +271,16 @@ match.shootoutWinner = null;
     match.status = "played";
 }
 
-async function updatePlayerDocsFromMatch(match){
-
-if(match.statsApplied) return;
-match.statsApplied = true;
-
-const ids = Object.keys(match.playerStats || {});
-
-for(const pid of ids){
-
-const snap = await getDoc(doc(db,"players",pid));
-if(!snap.exists()) continue;
-
-const player = snap.data();
-const stats = match.playerStats[pid];
-
-if(!player.stats) player.stats = {};
-if(!player.stats.total){
-player.stats.total = {
-matches:0,
-minutes:0,
-goals:0,
-assists:0,
-yellow:0,
-red:0
-};
-}
-
-player.stats.total.matches++;
-player.stats.total.minutes += stats.minutes || 0;
-player.stats.total.goals += stats.goals || 0;
-player.stats.total.assists += stats.assists || 0;
-player.stats.total.yellow += stats.yellow || 0;
-player.stats.total.red += stats.red || 0;
-
-player.stats.total.passesMade =
-(player.stats.total.passesMade || 0) + (stats.passesMade || 0);
-
-player.stats.total.passesTotal =
-(player.stats.total.passesTotal || 0) + (stats.passesTotal || 0);
-
-player.stats.total.xg =
-(player.stats.total.xg || 0) + (stats.xg || 0);
-
-player.stats.total.shots =
-(player.stats.total.shots || 0) + (stats.shots || 0);
-
-if(stats.rating !== undefined){
-player.stats.total.ratingSum =
-(player.stats.total.ratingSum || 0) + stats.rating;
-}
-
-const t = player.stats.total;
-
-if(t.matches > 0 && t.ratingSum){
-t.avgRating = t.ratingSum / t.matches;
-}
-
-await setDoc(doc(db,"players",player.id),player);
-
-}
-}
-
-
-function rebuildPlayerStats(data){
-
-    // ===== RESET =====
-    data.sports.forEach(sport=>{
-        sport.leagues?.forEach(league=>{
-            league.teams?.forEach(team=>{
-                team.players?.forEach(player=>{
-
-                    player.stats.total = {
-                        matches:0,
-                        minutes:0,
-                        goals:0,
-                        ownGoals:0,
-                        assists:0,
-                        yellow:0,
-                        red:0,
-                        ratingSum:0,
-                        avgRating:0
-                    };
-
-                    player.stats.seasons = {};
-                });
-            });
-        });
-    });
-
-
-    // ===== SBĚR DAT ZE ZÁPASŮ =====
-    data.sports.forEach(sport=>{
-        sport.leagues?.forEach(league=>{
-            league.seasons?.forEach(season=>{
-                season.rounds?.forEach(round=>{
-                    round.matches?.forEach(match=>{
-
-                        if(match.status !== "played") return;
-                        
-                        if(!match.playerStats) return;
-
-                        const seasonId = season.id;
-
-                        league.teams.forEach(team=>{
-                            team.players.forEach(player=>{
-
-const stats = match.playerStats[player.id];
-if(!stats) return;
-
-// 🔥 filtr ratingu jen pro fotbal
-if(sport.name === "Fotbal"){
-    if(stats.rating === undefined) return;
-}
-
-                                // ===== INIT SEASON =====
-                                if(!player.stats.seasons[seasonId]){
-                                   player.stats.seasons[seasonId] = {
-                                   matches:0,
-                                   minutes:0,
-                                   goals:0,
-                                   ownGoals:0,
-                                   assists:0,
-                                   yellow:0,
-                                   red:0,
-                                   passesMade:0,
-                                   passesTotal:0,
-                                   xg:0,
-
-                                  // hokej
-                                  shots:0,
-                                  plusMinus:0,
-                                  penaltyMinutes:0,
-                                  faceoffsTotal:0,
-                                  faceoffsWon:0,
-                                  saves:0,
-                                  shotsAgainst:0
-                                  };
-                                }
-                                // ===== TOTAL =====
-                                player.stats.total.matches += 1;
-                                player.stats.total.minutes += stats.minutes || 0;
-                                player.stats.total.goals += stats.goals || 0;
-                                player.stats.total.ownGoals += stats.ownGoals || 0;
-                                player.stats.total.assists += stats.assists || 0;
-                                player.stats.total.yellow += stats.yellow || 0;
-                                player.stats.total.red += stats.red || 0;
-
-                                // 🔥 rating bereme vždy pokud existuje
-                                if(stats.rating !== undefined){
-                                    player.stats.total.ratingSum += stats.rating;
-                                }
-
-                                // ===== SEASON =====
-                                player.stats.seasons[seasonId].matches += 1;
-                                player.stats.seasons[seasonId].minutes += stats.minutes || 0;
-                                player.stats.seasons[seasonId].goals += stats.goals || 0;
-                                player.stats.seasons[seasonId].ownGoals += stats.ownGoals || 0;
-                                player.stats.seasons[seasonId].assists += stats.assists || 0;
-                                player.stats.seasons[seasonId].yellow += stats.yellow || 0;
-                                player.stats.seasons[seasonId].red += stats.red || 0;
-                                player.stats.seasons[seasonId].passesMade += stats.passesMade || 0;
-                                player.stats.seasons[seasonId].passesTotal += stats.passesTotal || 0;
-                                player.stats.seasons[seasonId].xg += stats.xg || 0;
-                                player.stats.seasons[seasonId].shots += stats.shots || 0;
-                                player.stats.seasons[seasonId].plusMinus += stats.plusMinus || 0;
-                                player.stats.seasons[seasonId].faceoffsTotal += stats.faceoffsTotal || 0;
-                                player.stats.seasons[seasonId].faceoffsWon += stats.faceoffsWon || 0;
-                                player.stats.seasons[seasonId].penaltyMinutes += stats.penaltyMinutes || 0;
-                                player.stats.seasons[seasonId].saves += stats.saves || 0;
-                                player.stats.seasons[seasonId].shotsAgainst += stats.shotsAgainst || 0;
-                                
-                                // ===== SHOOTOUT STATS =====
-if(match.shootout && match.shootoutLog){
-
-match.shootoutLog.forEach(r=>{
-
-if(r.home.playerId === player.id){
-player.stats.seasons[seasonId].shootouts =
-    (player.stats.seasons[seasonId].shootouts || 0) + 1;
-
-if(r.home.goal === true){
-player.stats.seasons[seasonId].shootoutGoals =
-    (player.stats.seasons[seasonId].shootoutGoals || 0) + 1;
-}
-}
-
-if(r.away.playerId === player.id){
-player.stats.seasons[seasonId].shootouts =
-    (player.stats.seasons[seasonId].shootouts || 0) + 1;
-
-if(r.away.goal === true){
-player.stats.seasons[seasonId].shootoutGoals =
-    (player.stats.seasons[seasonId].shootoutGoals || 0) + 1;
-}
-}
-
-});
-
-}
-                            
-                            });
-                        });
-
-                    });
-                });
-            });
-        });
-    });
-
-
-    // ===== VÝPOČET PRŮMĚRU RATINGU =====
-    data.sports.forEach(sport=>{
-        sport.leagues?.forEach(league=>{
-            league.teams?.forEach(team=>{
-                team.players?.forEach(player=>{
-
-                    const total = player.stats.total;
-
-                    if(total.matches > 0 && total.ratingSum > 0){
-                        total.avgRating = total.ratingSum / total.matches;
-                    }else{
-                        total.avgRating = 0;
-                    }
-
-                });
-            });
-        });
-    });
-
-}
-
 
 
 function rebuildTeamStats(data){
 
 data.sports.forEach(sport=>{
 sport.leagues?.forEach(league=>{
+
+if(!league.teams || !Array.isArray(league.teams)){
+return;
+}
 
 // reset statistik týmů
 league.teams?.forEach(team=>{
@@ -661,6 +435,7 @@ homeStats.losses++;
 });
 }
 
+
 function updateTeamElo(homeTeam, awayTeam, homeScore, awayScore){
 
 const K = 20;
@@ -695,6 +470,89 @@ else{
 // new elo
 homeTeam.elo = Math.round(homeElo + K * (resultHome - expectedHome));
 awayTeam.elo = Math.round(awayElo + K * (resultAway - expectedAway));
+
+}
+
+async function recomputeStatsForPlayers(playerIds, leagueId){
+
+const matchesSnap = await getDocs(
+collection(db,"matches",leagueId,"list")
+);
+
+let totals = {};
+
+playerIds.forEach(pid=>{
+totals[pid] = {
+matches:0,
+minutes:0,
+goals:0,
+assists:0,
+yellow:0,
+red:0,
+shots:0,
+xg:0,
+passesMade:0,
+passesTotal:0,
+ratingSum:0
+};
+});
+
+matchesSnap.forEach(docSnap=>{
+
+const m = docSnap.data();
+if(m.status !== "played") return;
+if(!m.playerStats) return;
+
+playerIds.forEach(pid=>{
+
+const s = m.playerStats[pid];
+if(!s) return;
+
+let t = totals[pid];
+
+if((s.minutes||0)>0) t.matches++;
+t.minutes += s.minutes || 0;
+t.goals += s.goals || 0;
+t.assists += s.assists || 0;
+t.yellow += s.yellow || 0;
+t.red += s.red || 0;
+t.shots += s.shots || 0;
+t.xg += s.xg || 0;
+t.passesMade += s.passesMade || 0;
+t.passesTotal += s.passesTotal || 0;
+
+if(s.rating!==undefined){
+t.ratingSum += s.rating;
+}
+
+});
+
+});
+
+let batch = writeBatch(db);
+
+for(const pid of playerIds){
+
+let ref = doc(db,"players",pid);
+let snap = await getDoc(ref);
+if(!snap.exists()) continue;
+
+let player = snap.data();
+let t = totals[pid];
+
+t.avgRating = t.matches>0 ? t.ratingSum/t.matches : 0;
+t.passSuccess = t.passesTotal>0
+? (t.passesMade/t.passesTotal)*100
+: 0;
+
+if(!player.stats) player.stats = {};
+player.stats.total = t;
+
+batch.set(ref, player);
+
+}
+
+await batch.commit();
 
 }
 
@@ -885,25 +743,18 @@ margin-top:150px;
 renderPlayers(awayPlayers,"awayPlayers","awayLineup",match,sport);
     const select = document.getElementById("refereeSelect");
 
+if(!league.referees) league.referees = [];
+
 select.innerHTML = `<option value="">-- nevybrán --</option>`;
 
-// 🔥 načti rozhodčí z nové kolekce
-const refsSnap = await getDocs(
-query(
-collection(db,"referees"),
-where("leagueId","==",leagueId)
-)
-);
-
-const referees = refsSnap.docs.map(d=>d.data());
-
-referees
+(league.referees || [])
+.slice()
 .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
 .forEach(r=>{
-const option = document.createElement("option");
-option.value = r.id;
-option.textContent = r.name;
-select.appendChild(option);
+    const option = document.createElement("option");
+    option.value = r.id;
+    option.textContent = r.name;
+    select.appendChild(option);
 });
 
 // pokud už byl uložen
@@ -1156,19 +1007,18 @@ stats.goalsOT !== undefined
 
     });
 
-   calculateScore(match);
-
-if(match.status === "played"){
-    await updatePlayerDocsFromMatch(match);
-}
+  calculateScore(match);
 
 await saveMatchToNewStructure(match, league, sport);
 
-window.location.href="zapasy.html";
+const affectedPlayers = Object.keys(match.playerStats || {});
 
+await recomputeStatsForPlayers(affectedPlayers, league.id);
+
+
+window.location.href = "zapasy.html";
 };
 }
-
 function renderPlayers(players,containerId,lineupKey,match,sport){
 
     const alphabetContainer =
