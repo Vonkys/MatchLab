@@ -483,17 +483,27 @@ let totals = {};
 
 playerIds.forEach(pid=>{
 totals[pid] = {
-matches:0,
-minutes:0,
-goals:0,
-assists:0,
-yellow:0,
-red:0,
-shots:0,
-xg:0,
-passesMade:0,
-passesTotal:0,
-ratingSum:0
+ matches:0,
+ minutes:0,
+ goals:0,
+ assists:0,
+ shots:0,
+
+ // ⭐ fotbal
+ yellow:0,
+ red:0,
+ xg:0,
+ passesMade:0,
+ passesTotal:0,
+ ratingSum:0,
+
+ // ⭐ HOKEJ NOVÉ
+ plusMinus:0,
+ penaltyMinutes:0,
+ faceoffsTotal:0,
+ faceoffsWon:0,
+ saves:0,
+ shotsAgainst:0
 };
 });
 
@@ -520,6 +530,13 @@ t.shots += s.shots || 0;
 t.xg += s.xg || 0;
 t.passesMade += s.passesMade || 0;
 t.passesTotal += s.passesTotal || 0;
+// ⭐ HOKEJ
+t.plusMinus += s.plusMinus || 0;
+t.penaltyMinutes += s.penaltyMinutes || 0;
+t.faceoffsTotal += s.faceoffsTotal || 0;
+t.faceoffsWon += s.faceoffsWon || 0;
+t.saves += s.saves || 0;
+t.shotsAgainst += s.shotsAgainst || 0;
 
 if(s.rating!==undefined){
 t.ratingSum += s.rating;
@@ -543,6 +560,16 @@ let t = totals[pid];
 t.avgRating = t.matches>0 ? t.ratingSum/t.matches : 0;
 t.passSuccess = t.passesTotal>0
 ? (t.passesMade/t.passesTotal)*100
+: 0;
+
+// ⭐ buly %
+t.faceoffPct = t.faceoffsTotal>0
+? (t.faceoffsWon / t.faceoffsTotal) * 100
+: 0;
+
+// ⭐ save %
+t.savePct = t.shotsAgainst>0
+? (t.saves / t.shotsAgainst) * 100
 : 0;
 
 if(!player.stats) player.stats = {};
