@@ -774,20 +774,30 @@ margin-top:150px;
 
     renderPlayers(homePlayers,"homePlayers","homeLineup",match,sport);
 renderPlayers(awayPlayers,"awayPlayers","awayLineup",match,sport);
-    const select = document.getElementById("refereeSelect");
+// ===== ROZHODČÍ (NOVÁ DB STRUKTURA) =====
 
-if(!league.referees) league.referees = [];
+const select = document.getElementById("refereeSelect");
 
 select.innerHTML = `<option value="">-- nevybrán --</option>`;
 
-(league.referees || [])
-.slice()
-.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
-.forEach(r=>{
+// načtení rozhodčích z Firestore
+const refSnap = await getDocs(
+    collection(db,"referees")
+);
+
+const referees = refSnap.docs
+    .map(d => d.data())
+    .filter(r => r.leagueId === leagueId)
+    .sort((a,b)=> a.name.localeCompare(b.name,"cs"));
+
+referees.forEach(r => {
+
     const option = document.createElement("option");
     option.value = r.id;
     option.textContent = r.name;
+
     select.appendChild(option);
+
 });
 
 // pokud už byl uložen
