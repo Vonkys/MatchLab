@@ -97,7 +97,7 @@ button:hover{ background:#3a3a3a; }
 /* ================= FIREBASE ================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, query, where }
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -171,7 +171,8 @@ let state={
     sportId:null,
     leagueId:null,
     teamId:null,
-    playerId:null
+    playerId:null,
+    lastPlayerPosition:"ATT"
 };
 
 /* ================= ROUTER ================= */
@@ -259,24 +260,9 @@ async function deleteSport(id){
 
 async function renderLeagues(){
 
-    if(!state.sportId){
-        state.view = "sports";
-        render();
-        return;
-    }
-
-    const data = await getData();
-
-    const sport = data.sports.find(s=>s.id===state.sportId);
-
-    if(!sport){
-        state.view = "sports";
-        state.sportId = null;
-        render();
-        return;
-    }
-
-    const app = document.getElementById("app");
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+    const app=document.getElementById("app");
 
     app.innerHTML=`
         <div class="back">← zpět</div>
@@ -310,22 +296,6 @@ async function renderLeagues(){
 
         list.appendChild(div);
     });
-}
-
-async function addLeague() {
-    const name = document.getElementById("leagueName").value.trim();
-    if (!name) return;
-
-    const data = await getData();
-    const sport = data.sports.find(s => s.id === state.sportId);
-
-    sport.leagues.push({
-        id: generateId(),
-        name,
-    });
-
-    await saveData(data);
-    render(); // Překreslí stránku, aby se ukázala nová liga
 }
 
 async function renderLeagueMenu(){
@@ -364,77 +334,13 @@ async function renderLeagueMenu(){
     };
 }
 
-async function renderTeams(){
-
-    const data = await getData();
-    const sport = data.sports.find(s=>s.id===state.sportId);
-    const league = sport.leagues.find(l=>l.id===state.leagueId);
-
-    const app = document.getElementById("app");
-
-    app.innerHTML = `
-        <div class="back">← zpět</div>
-        <h2>Týmy – ${league.name}</h2>
-
-        <input id="teamName" placeholder="Nový tým">
-        <button id="addTeamBtn">Přidat tým</button>
-
-        <div id="list"></div>
-    `;
-
-    document.querySelector(".back").onclick = goBack;
-
-    document.getElementById("addTeamBtn").onclick = addTeam;
-
-    const snap = await getDocs(
-        query(
-            collection(db,"teams"),
-            where("leagueId","==",state.leagueId)
-        )
-    );
-
-    const teams = snap.docs.map(d=>d.data());
-
-    const list = document.getElementById("list");
-
-    teams
-    .slice()
-    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
-    .forEach(t=>{
-
-        const div = document.createElement("div");
-        div.className = "card";
-
-        div.innerHTML = `
-            <span>${t.name}</span>
-            <div class="delete">✖</div>
-        `;
-
-        div.querySelector("span").onclick = ()=>{
-            state.view = "players";
-            state.teamId = t.id;
-            render();
-        };
-
-        div.querySelector(".delete").onclick = async ()=>{
-
-            if(!confirm("Smazat tým?")) return;
-
-            await deleteDoc(doc(db,"teams",t.id));
-
-            render();
-        };
-
-        list.appendChild(div);
-    });
-
-}
-
 async function renderReferees(){
 
     const data=await getData();
     const sport=data.sports.find(s=>s.id===state.sportId);
     const league=sport.leagues.find(l=>l.id===state.leagueId);
+
+    if(!league.referees) league.referees=[];
 
     const app=document.getElementById("app");
 
@@ -453,40 +359,26 @@ async function renderReferees(){
         render();
     };
 
-    // 🔥 načti referees z kolekce
-    const snap = await getDocs(
-        query(
-            collection(db,"referees"),
-            where("leagueId","==",state.leagueId)
-        )
-    );
-
-    const referees = snap.docs.map(d=>d.data());
-
-    // ➕ přidání
     document.getElementById("addRefBtn").onclick=async ()=>{
 
         const name=document.getElementById("refName").value.trim();
         if(!name) return;
 
-        const id = generateId();
+        league.referees.push({
+            id:generateId(),
+            name
+        });
 
-        await setDoc(doc(db,"referees",id),{
-    id,
-    name,
-    leagueId: state.leagueId,
-    sportId: state.sportId
-});
-
+        await saveData(data);
         render();
     };
 
     const list=document.getElementById("list");
 
-    referees
-    .slice()
-    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
-    .forEach(r=>{
+   (league.referees || [])
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(r=>{
 
         const div=document.createElement("div");
         div.className="card";
@@ -500,13 +392,101 @@ async function renderReferees(){
 
             if(!confirm("Smazat rozhodčího?")) return;
 
-            await deleteDoc(doc(db,"referees",r.id));
+            league.referees=league.referees.filter(x=>x.id!==r.id);
 
+            await saveData(data);
             render();
         };
 
         list.appendChild(div);
     });
+}
+
+async function addLeague(){
+
+    const name=document.getElementById("leagueName").value.trim();
+    if(!name) return;
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+
+   sport.leagues.push({
+    id:generateId(),
+    name,
+    referees:[],
+    rounds:[]
+});
+
+    await saveData(data);
+    render();
+}
+
+async function deleteLeague(id){
+
+    if(!checkDeletePassword()) return;
+
+    if(!confirm("Smazat ligu?")) return;
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+
+    sport.leagues=sport.leagues.filter(l=>l.id!==id);
+
+    await saveData(data);
+    render();
+}
+
+/* ================= TEAMS ================= */
+
+async function renderTeams(){
+
+    const data=await getData();
+    const sport=data.sports.find(s=>s.id===state.sportId);
+    const league=sport.leagues.find(l=>l.id===state.leagueId);
+
+    const snap = await getDocs(collection(db,"teams"));
+    const teams = snap.docs.map(d=>d.data())
+        .filter(t=>t.leagueId === league.id);
+
+    const app=document.getElementById("app");
+
+    app.innerHTML=`
+        <div class="back">← zpět</div>
+        <h2>${league.name}</h2>
+        <input id="teamName" placeholder="Nový tým">
+        <button id="addTeamBtn">Přidat tým</button>
+        <div id="list"></div>
+    `;
+
+    document.querySelector(".back").onclick=goBack;
+    document.getElementById("addTeamBtn").onclick=addTeam;
+
+    const list=document.getElementById("list");
+
+    teams
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+    .forEach(t=>{
+
+        const div=document.createElement("div");
+        div.className="card";
+
+        div.innerHTML=`
+            <span>${t.name}</span>
+            <div class="delete">✖</div>
+        `;
+
+        div.querySelector("span").onclick=()=>{
+            state.view="players";
+            state.teamId=t.id;
+            render();
+        };
+
+        div.querySelector(".delete").onclick=()=>deleteTeam(t.id);
+
+        list.appendChild(div);
+    });
+
 }
 
 async function renderPlayers(){
@@ -528,16 +508,36 @@ const teamPlayers = snap.docs
         <div class="back">← zpět</div>
         <h2>${team.name}</h2>
 
-        <input id="playerName" placeholder="Nový hráč">
-        <button id="addPlayerBtn">Přidat hráče</button>
+<input id="playerName" placeholder="Nový hráč">
+
+<select id="playerPosition" style="
+width:100%;
+padding:14px;
+margin-top:10px;
+border:none;
+border-radius:10px;
+background:#1b1b1b;
+color:white;
+">
+<option value="ATT">⚡ Útočník</option>
+<option value="MID">🎯 Záložník</option>
+<option value="DEF">🛡 Obránce</option>
+<option value="GK">🧤 Brankář</option>
+</select>
+
+<button id="addPlayerBtn">Přidat hráče</button>
 
         <div id="list"></div>
     `;
 
     document.querySelector(".back").onclick = goBack;
-    document.getElementById("addPlayerBtn").onclick = addPlayer;
+document.getElementById("addPlayerBtn").onclick = addPlayer;
 
-    const list=document.getElementById("list");
+// 🔥 nastav poslední zvolenou pozici
+document.getElementById("playerPosition").value =
+state.lastPlayerPosition;
+
+const list=document.getElementById("list");
 
     // === ROZDĚLENÍ PODLE POZICE ===
     const groups = {
@@ -631,8 +631,12 @@ const teamPlayers = snap.docs
 }
 async function addPlayer(){
 
-const name=document.getElementById("playerName").value.trim();
+const name = document.getElementById("playerName").value.trim();
 if(!name) return;
+
+const position =
+document.getElementById("playerPosition").value;
+state.lastPlayerPosition = position;
 
 const id = generateId();
 
@@ -642,7 +646,7 @@ await setDoc(doc(db,"players",id),{
     teamId: state.teamId,
     leagueId: state.leagueId,
     sportId: state.sportId,
-    position:"ATT",
+    position: position,
     status:"available",
     stats:{
         total:{
@@ -656,6 +660,9 @@ await setDoc(doc(db,"players",id),{
         seasons:{}
     }
 });
+
+document.getElementById("playerName").value = "";
+document.getElementById("playerName").focus();
 
 render();
 }
