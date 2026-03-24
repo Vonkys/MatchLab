@@ -386,7 +386,6 @@ html += `
 <th class="player">Hráč</th>
 <th onclick="sortBy('team')">Tým</th>
 <th onclick="sortBy('matches')">Z</th>
-<th onclick="sortBy('minutes')">TOI</th>
 <th onclick="sortBy('goals')">G</th>
 <th onclick="sortBy('assists')">A</th>
 <th onclick="sortBy('points')">B</th>
@@ -420,9 +419,6 @@ ${r.name}
 
 <td class="team">${r.team}</td>
 <td>${r.matches}</td>
-
-<td>${Math.floor(r.minutes/60)+":"+String(r.minutes%60).padStart(2,"0")}</td>
-
 <td><b>${r.goals}</b></td>
 <td>${r.assists}</td>
 <td><b>${r.points}</b></td>
