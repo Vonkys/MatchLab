@@ -171,6 +171,20 @@ const leagueTeams = allTeams.filter(t => t.leagueId === leagueId);
 const snapPlayers = await getDocs(collection(db,"players"));
 const allPlayers = snapPlayers.docs.map(d=>d.data());
 
+// 🔥 načti zápasy JEDNOU
+const matchesSnap = await getDocs(
+collection(db,"matches",leagueId,"list")
+);
+
+let lineupPlayers = new Set();
+
+matchesSnap.forEach(doc=>{
+const m = doc.data();
+
+(m.homeLineup || []).forEach(id => lineupPlayers.add(id));
+(m.awayLineup || []).forEach(id => lineupPlayers.add(id));
+});
+
 allPlayers.forEach(player=>{
 
 const team = leagueTeams.find(t => t.id === player.teamId);
@@ -178,7 +192,9 @@ if(!team) return;
 
 const stats = player.stats?.total;
 if(!stats) return;
-if(!stats.matches) return;
+
+// 🔥 zobraz jen hráče kteří někdy byli v sestavě
+if(!lineupPlayers.has(player.id)) return;
 
 
 if(window.sportName === "Hokej"){
