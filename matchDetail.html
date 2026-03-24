@@ -1060,7 +1060,10 @@ match.playerStats[playerId] = {
 
 await saveMatchToNewStructure(match, league, sport);
 
-const affectedPlayers = Object.keys(match.playerStats || {});
+const affectedPlayers = [
+...(match.homeLineup || []),
+...(match.awayLineup || [])
+];
 
 await recomputeStatsForPlayers(affectedPlayers, league.id);
 
