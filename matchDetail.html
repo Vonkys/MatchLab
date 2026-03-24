@@ -533,7 +533,13 @@ if(r.away.goal) t.shootoutGoals++;
 }
 
 // ⭐ klasické stats
-if((s.minutes||0)>0) t.matches++;
+// 🔥 zápas se počítá když je hráč v sestavě
+if(
+(m.homeLineup || []).includes(pid) ||
+(m.awayLineup || []).includes(pid)
+){
+t.matches++;
+}
 t.minutes += s.minutes || 0;
 t.goals += s.goals || 0;
 t.assists += s.assists || 0;
@@ -1021,35 +1027,31 @@ stats[keys[i]] = Number(raw) || 0;
 
 });
 
-        if(Object.keys(stats).length > 0){
+        // 🔥 vždy vytvoř stats objekt když je hráč v sestavě
 
-    if(stats.goals1H !== undefined || stats.goals2H !== undefined){
-    stats.goals =
-        (Number(stats.goals1H) || 0) +
-        (Number(stats.goals2H) || 0);
+if(stats.goals1H !== undefined || stats.goals2H !== undefined){
+stats.goals =
+    (Number(stats.goals1H) || 0) +
+    (Number(stats.goals2H) || 0);
 }
-    if(
+
+if(
 stats.goals1P !== undefined ||
 stats.goals2P !== undefined ||
 stats.goals3P !== undefined ||
 stats.goalsOT !== undefined
 ){
-    stats.goals =
-        (stats.goals1P || 0) +
-        (stats.goals2P || 0) +
-        (stats.goals3P || 0) +
-        (stats.goalsOT || 0);
+stats.goals =
+    (stats.goals1P || 0) +
+    (stats.goals2P || 0) +
+    (stats.goals3P || 0) +
+    (stats.goalsOT || 0);
 }
-   
-   
-    match.playerStats[playerId] = {
-    ...(match.playerStats[playerId] || {}),
-    ...stats
-};
 
-}else{
-    delete match.playerStats[playerId];
-}
+match.playerStats[playerId] = {
+...(match.playerStats[playerId] || {}),
+...stats
+};
 
     });
 
