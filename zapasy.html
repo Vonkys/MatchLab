@@ -679,7 +679,16 @@ Object.keys(seasons)
         roundDiv.style.alignItems="center";
 
         const roundTitle = document.createElement("div");
-        roundTitle.innerHTML = "▶ " + roundNumber + ". kolo";
+        let roundObj =
+        league.seasons
+        ?.find(s => s.id === seasonId)
+        ?.rounds
+        ?.find(r => Number(r.number) === Number(roundNumber));
+
+        let roundName =
+        roundObj?.name || (roundNumber + ". kolo");
+
+        roundTitle.innerHTML = "▶ " + roundName;
         roundTitle.style.cursor="pointer";
         roundTitle.style.flex="1";
 
