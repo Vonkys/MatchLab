@@ -494,7 +494,14 @@ if(roundSelect.value === "new"){
 }else{
 
     roundNumber = roundSelect.value;
-    roundName = roundNumber + ". kolo";
+
+    // 🔥 vezmeme EXISTUJÍCÍ název kola z main struktury
+    let seasonObj = league.seasons.find(s => s.id === seasonSelect.value);
+
+    let existingRound =
+        seasonObj?.rounds?.find(r => Number(r.number) === Number(roundNumber));
+
+    roundName = existingRound?.name || (roundNumber + ". kolo");
 
 }
 
@@ -538,6 +545,9 @@ if(!roundObj){
         matches:[]
     };
     season.rounds.push(roundObj);
+}else{
+    // 🔥 update názvu pokud už kolo existuje
+    roundObj.name = roundName;
 }
 season.rounds.sort((a,b)=> a.number - b.number);
 // uloz datum kola pokud jeste nema
