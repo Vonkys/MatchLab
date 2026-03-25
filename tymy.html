@@ -340,8 +340,6 @@ async function renderReferees(){
     const sport=data.sports.find(s=>s.id===state.sportId);
     const league=sport.leagues.find(l=>l.id===state.leagueId);
 
-    if(!league.referees) league.referees=[];
-
     const app=document.getElementById("app");
 
     app.innerHTML=`
@@ -364,42 +362,47 @@ async function renderReferees(){
         const name=document.getElementById("refName").value.trim();
         if(!name) return;
 
-        league.referees.push({
-            id:generateId(),
-            name
-        });
+        const id = generateId();
 
-        await saveData(data);
+await setDoc(doc(db,"referees",id),{
+   id,
+   name,
+   leagueId: league.id,
+   sportId: state.sportId
+});
         render();
     };
 
-    const list=document.getElementById("list");
+const list=document.getElementById("list");
 
-   (league.referees || [])
-.slice()
-.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
-.forEach(r=>{
+const snap = await getDocs(collection(db,"referees"));
 
-        const div=document.createElement("div");
-        div.className="card";
+const refs = snap.docs
+.map(d=>d.data())
+.filter(r => r.leagueId === league.id)
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"));
 
-        div.innerHTML=`
-            <span>${r.name}</span>
-            <div class="delete">✖</div>
-        `;
+refs.forEach(r=>{
 
-        div.querySelector(".delete").onclick=async ()=>{
+    const div=document.createElement("div");
+    div.className="card";
 
-            if(!confirm("Smazat rozhodčího?")) return;
+    div.innerHTML=`
+        <span>${r.name}</span>
+        <div class="delete">✖</div>
+    `;
 
-            league.referees=league.referees.filter(x=>x.id!==r.id);
+    div.querySelector(".delete").onclick=async ()=>{
 
-            await saveData(data);
-            render();
-        };
+        if(!checkDeletePassword()) return;
+        if(!confirm("Smazat rozhodčího?")) return;
 
-        list.appendChild(div);
-    });
+        await deleteDoc(doc(db,"referees",r.id));
+        render();
+    };
+
+    list.appendChild(div);
+});
 }
 
 async function addLeague(){
