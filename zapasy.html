@@ -689,6 +689,14 @@ Object.keys(seasons)
         roundDiv.style.alignItems="center";
 
         const roundTitle = document.createElement("div");
+        roundTitle.ondblclick = async ()=>{
+    const newName = prompt("Nový název kola:", roundName);
+
+    if(!newName) return;
+
+    await updateRoundName(league.id, seasonId, roundNumber, newName);
+};
+        
         let roundObj =
         league.seasons
         ?.find(s => s.id === seasonId)
@@ -960,6 +968,39 @@ if(league.id !== leagueId) return;
 
 league.seasons =
 (league.seasons || []).filter(s => s.id !== seasonId);
+
+});
+});
+
+await saveData(data);
+
+MATCHES_CACHE = null;
+
+render();
+}
+
+async function updateRoundName(leagueId, seasonId, roundNumber, newName){
+
+const data = await getData();
+
+data.sports?.forEach(sport=>{
+sport.leagues?.forEach(league=>{
+
+if(league.id !== leagueId) return;
+
+league.seasons?.forEach(season=>{
+
+if(season.id !== seasonId) return;
+
+let round = season.rounds?.find(r =>
+Number(r.number) === Number(roundNumber)
+);
+
+if(round){
+round.name = newName;
+}
+
+});
 
 });
 });
