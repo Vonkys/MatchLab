@@ -131,206 +131,234 @@ async function loadPlayers(){
 
     const leagueId = getLeagueId();
 
-let league = null;
-window.sportName = "";
+    let league = null;
+    window.sportName = "";
 
-data.sports.forEach(s=>{
-    s.leagues?.forEach(l=>{
-        if(l.id === leagueId){
-            league = l;
-            window.sportName = s.name;
-        }
+    data.sports.forEach(s=>{
+        s.leagues?.forEach(l=>{
+            if(l.id === leagueId){
+                league = l;
+                window.sportName = s.name;
+            }
+        });
     });
-});
 
-if(!league){
-    document.getElementById("leagueTitle").textContent = "Liga nenalezena";
-    return;
-}
+    if(!league){
+        document.getElementById("leagueTitle").textContent = "Liga nenalezena";
+        return;
+    }
 
     document.getElementById("leagueTitle").textContent =
         `Statistiky hráčů – ${league.name}`;
 
-    const season = league.seasons?.at(-1);
-    if(!season){
+    // ===== SEASON SELECT =====
+
+    const seasons = league.seasons || [];
+
+    if(seasons.length === 0){
         document.getElementById("table").innerHTML =
-            "<tr><td>Žádná sezóna</td></tr>";
+        "<tr><td>Žádná sezóna</td></tr>";
         return;
     }
 
-    const seasonId = season.id;
+    let selectedSeason = "total";
 
-   window.rows = [];
-let rows = window.rows;
+    const seasonSelect = document.createElement("select");
 
-const snapTeams = await getDocs(collection(db,"teams"));
-const allTeams = snapTeams.docs.map(d=>d.data());
+    seasonSelect.style.marginTop = "10px";
+    seasonSelect.style.padding = "8px";
+    seasonSelect.style.background = "#111";
+    seasonSelect.style.color = "white";
+    seasonSelect.style.border = "1px solid #333";
+    seasonSelect.style.borderRadius = "6px";
 
-const leagueTeams = allTeams.filter(t => t.leagueId === leagueId);
+    const totalOpt = document.createElement("option");
+    totalOpt.value = "total";
+    totalOpt.textContent = "Celkově";
+    seasonSelect.appendChild(totalOpt);
 
-const snapPlayers = await getDocs(collection(db,"players"));
-const allPlayers = snapPlayers.docs.map(d=>d.data());
+    seasons.forEach(s=>{
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.name;
+        seasonSelect.appendChild(opt);
+    });
 
-// 🔥 načti zápasy JEDNOU
-const matchesSnap = await getDocs(
-collection(db,"matches",leagueId,"list")
-);
+    document.querySelector(".container")
+    .insertBefore(seasonSelect,
+    document.getElementById("table"));
 
-let lineupPlayers = new Set();
+    // ===== DATA LOAD =====
 
-matchesSnap.forEach(doc=>{
-const m = doc.data();
+    const snapTeams = await getDocs(collection(db,"teams"));
+    const allTeams = snapTeams.docs.map(d=>d.data());
 
-(m.homeLineup || []).forEach(id => lineupPlayers.add(id));
-(m.awayLineup || []).forEach(id => lineupPlayers.add(id));
-});
+    const leagueTeams = allTeams.filter(t => t.leagueId === leagueId);
 
-allPlayers.forEach(player=>{
+    const snapPlayers = await getDocs(collection(db,"players"));
+    const allPlayers = snapPlayers.docs.map(d=>d.data());
 
-const team = leagueTeams.find(t => t.id === player.teamId);
-if(!team) return;
+    const matchesSnap = await getDocs(
+        collection(db,"matches",leagueId,"list")
+    );
 
-const stats = player.stats?.total;
-if(!stats) return;
+    let lineupPlayers = new Set();
 
-// 🔥 zobraz jen hráče kteří někdy byli v sestavě
-if(!lineupPlayers.has(player.id)) return;
+    matchesSnap.forEach(doc=>{
+        const m = doc.data();
 
+        (m.homeLineup || []).forEach(id => lineupPlayers.add(id));
+        (m.awayLineup || []).forEach(id => lineupPlayers.add(id));
+    });
 
-if(window.sportName === "Hokej"){
+    // ===== RENDER =====
 
-// ===== BRANKÁŘ =====
-if(player.position === "GK"){
+    function renderPlayersTable(){
 
-rows.push({
-    name:player.name,
-    team:team.name,
-    position:"GK",
-    matches:stats.matches,
-    minutes:stats.minutes || 0,
-    saves:stats.saves || 0,
-    shotsAgainst:stats.shotsAgainst || 0,
-    savePct:(stats.shotsAgainst || 0) > 0
-        ? ((stats.saves / stats.shotsAgainst) * 100).toFixed(1)
-        : 0
-});
+        window.rows = [];
+        let rows = window.rows;
 
-}
+        allPlayers.forEach(player=>{
 
-// ===== HRÁČI =====
-else{
+            const team = leagueTeams.find(t => t.id === player.teamId);
+            if(!team) return;
 
-rows.push({
-    name:player.name,
-    team:team.name,
-    position:player.position || "ATT",
-    matches:stats.matches,
-    minutes:stats.minutes || 0,
-    goals:stats.goals || 0,
-    assists:stats.assists || 0,
-    points:(stats.goals || 0) + (stats.assists || 0),
-    plusMinus:stats.plusMinus || 0,
-    shots:stats.shots || 0,
-    penaltyMinutes:stats.penaltyMinutes || 0,
-    faceoffsTotal:stats.faceoffsTotal || 0,
-    faceoffsWon:stats.faceoffsWon || 0,
-    faceoffPct:(stats.faceoffsTotal || 0) > 0
-        ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
-        : 0,
+            let stats;
 
-    shootouts: stats.shootoutAttempts || 0,
-shootoutGoals: stats.shootoutGoals || 0,
-shootoutPct: (Number(stats.shootoutAttempts) || 0) > 0
-? ((Number(stats.shootoutGoals || 0) / Number(stats.shootoutAttempts)) * 100).toFixed(0)
-: 0
-});
+            if(selectedSeason === "total"){
+                stats = player.stats?.total;
+            }else{
+                stats = player.stats?.seasons?.[selectedSeason];
+            }
 
-}
+            if(!stats || !stats.matches) return;
+            if(!lineupPlayers.has(player.id)) return;
 
+            if(window.sportName === "Hokej"){
 
+                if(player.position === "GK"){
 
-}else{
+                    rows.push({
+                        name:player.name,
+                        team:team.name,
+                        position:"GK",
+                        matches:stats.matches,
+                        minutes:stats.minutes || 0,
+                        saves:stats.saves || 0,
+                        shotsAgainst:stats.shotsAgainst || 0,
+                        savePct:(stats.shotsAgainst || 0) > 0
+                            ? ((stats.saves / stats.shotsAgainst) * 100).toFixed(1)
+                            : 0
+                    });
 
-rows.push({
-    name:player.name,
-    team:team.name,
-    position:player.position || "ATT",
-    matches:stats.matches,
-    minutes:stats.minutes || 0,
-    goals:stats.goals || 0,
-    assists:stats.assists || 0,
-    yellow:stats.yellow || 0,
-    red:stats.red || 0,
+                }else{
 
-    passes: stats.passesTotal || 0,
-    passesCompleted: stats.passesMade || 0,
-    passAccuracy: (stats.passesTotal || 0) > 0
-        ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
-        : 0,
+                    rows.push({
+                        name:player.name,
+                        team:team.name,
+                        position:player.position || "ATT",
+                        matches:stats.matches,
+                        minutes:stats.minutes || 0,
+                        goals:stats.goals || 0,
+                        assists:stats.assists || 0,
+                        points:(stats.goals || 0) + (stats.assists || 0),
+                        plusMinus:stats.plusMinus || 0,
+                        shots:stats.shots || 0,
+                        penaltyMinutes:stats.penaltyMinutes || 0,
+                        faceoffsTotal:stats.faceoffsTotal || 0,
+                        faceoffsWon:stats.faceoffsWon || 0,
+                        faceoffPct:(stats.faceoffsTotal || 0) > 0
+                            ? ((stats.faceoffsWon / stats.faceoffsTotal) * 100).toFixed(0)
+                            : 0,
+                        shootouts: stats.shootoutAttempts || 0,
+                        shootoutGoals: stats.shootoutGoals || 0,
+                        shootoutPct: (Number(stats.shootoutAttempts) || 0) > 0
+                            ? ((Number(stats.shootoutGoals || 0) / Number(stats.shootoutAttempts)) * 100).toFixed(0)
+                            : 0
+                    });
 
-    xgPer90: stats.minutes > 0
-        ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
-        : 0,
+                }
 
-    avgRating: player.stats?.total?.avgRating || 0,
+            }else{
 
-    goalsPer90: stats.minutes > 0
-        ? ((stats.goals / stats.minutes) * 90).toFixed(2)
-        : 0
-});
+                rows.push({
+                    name:player.name,
+                    team:team.name,
+                    position:player.position || "ATT",
+                    matches:stats.matches,
+                    minutes:stats.minutes || 0,
+                    goals:stats.goals || 0,
+                    assists:stats.assists || 0,
+                    yellow:stats.yellow || 0,
+                    red:stats.red || 0,
+                    passes: stats.passesTotal || 0,
+                    passesCompleted: stats.passesMade || 0,
+                    passAccuracy: (stats.passesTotal || 0) > 0
+                        ? ((stats.passesMade / stats.passesTotal) * 100).toFixed(0)
+                        : 0,
+                    xgPer90: stats.minutes > 0
+                        ? ((stats.xg || 0) / stats.minutes * 90).toFixed(2)
+                        : 0,
+                    avgRating: stats.avgRating || 0,
+                    goalsPer90: stats.minutes > 0
+                        ? ((stats.goals / stats.minutes) * 90).toFixed(2)
+                        : 0
+                });
 
-}
+            }
 
         });
 
-    
+        // ===== SORT =====
 
-   // 🔥 řazení
+        if(window.sportName === "Hokej"){
 
-if(window.sportName === "Hokej"){
+            rows.sort((a,b)=>{
 
-rows.sort((a,b)=>{
+                if(a.position === "GK" && b.position !== "GK") return 1;
+                if(b.position === "GK" && a.position !== "GK") return -1;
 
-// brankáři vždy dole
-if(a.position === "GK" && b.position !== "GK") return 1;
-if(b.position === "GK" && a.position !== "GK") return -1;
+                if(b.points !== a.points) return b.points - a.points;
+                if(b.goals !== a.goals) return b.goals - a.goals;
 
-if(b.points !== a.points)
-return b.points - a.points;
+                return b.assists - a.assists;
 
-if(b.goals !== a.goals)
-return b.goals - a.goals;
+            });
 
-return b.assists - a.assists;
+        }else{
 
-});
+            rows.sort((a,b)=>{
 
-}else{
+                if((b.avgRating || 0) !== (a.avgRating || 0))
+                    return (b.avgRating || 0) - (a.avgRating || 0);
 
-rows.sort((a,b)=>{
+                if(b.goals !== a.goals) return b.goals - a.goals;
 
-if(b.avgRating !== a.avgRating)
-return b.avgRating - a.avgRating;
+                return b.assists - a.assists;
 
-if(b.goals !== a.goals)
-return b.goals - a.goals;
+            });
 
-return b.assists - a.assists;
+        }
 
-});
+        renderTable(rows);
+    }
 
+    // 🔥 CHANGE EVENT
+    seasonSelect.onchange = ()=>{
+        selectedSeason = seasonSelect.value;
+        renderPlayersTable();
+    };
+
+    // 🔥 INITIAL RENDER
+    renderPlayersTable();
 }
 
-    renderTable(window.rows);
-
-}
 const positionColors = {
     GK:"#3498db",
     DEF:"#2ecc71",
     MID:"#f1c40f",
     ATT:"#e74c3c"
 };
-
 
 function renderTable(rows){
 
