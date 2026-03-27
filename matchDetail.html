@@ -501,6 +501,7 @@ collection(db,"matches",leagueId,"list")
 );
 
 let totals = {};
+let seasonTotals = {};
 
 playerIds.forEach(pid=>{
 totals[pid] = {
@@ -524,6 +525,8 @@ shotsAgainst:0,
 shootoutAttempts:0,
 shootoutGoals:0,
 };
+
+seasonTotals[pid] = {};
 });
 
 matchesSnap.forEach(docSnap=>{
@@ -531,61 +534,74 @@ matchesSnap.forEach(docSnap=>{
 const m = docSnap.data();
 if(m.status !== "played") return;
 if(!m.playerStats) return;
+if(!m.season) return;
+
+const seasonId = m.season;
 
 playerIds.forEach(pid=>{
 
 const s = m.playerStats[pid];
 if(!s) return;
 
+// init sezóny
+if(!seasonTotals[pid][seasonId]){
+seasonTotals[pid][seasonId] = JSON.parse(JSON.stringify(totals[pid]));
+}
+
 let t = totals[pid];
+let st = seasonTotals[pid][seasonId];
 
 // ⭐ nájezdy
 if(m.shootout && m.shootoutLog){
 m.shootoutLog.forEach(r=>{
 if(r.home?.playerId === pid){
 t.shootoutAttempts++;
-if(r.home.goal) t.shootoutGoals++;
+st.shootoutAttempts++;
+if(r.home.goal){
+t.shootoutGoals++;
+st.shootoutGoals++;
+}
 }
 if(r.away?.playerId === pid){
 t.shootoutAttempts++;
-if(r.away.goal) t.shootoutGoals++;
+st.shootoutAttempts++;
+if(r.away.goal){
+t.shootoutGoals++;
+st.shootoutGoals++;
+}
 }
 });
 }
 
-// ⭐ klasické stats
-// 🔥 zápas se počítá když je hráč v sestavě
+// zápas
 if(
 (m.homeLineup || []).includes(pid) ||
 (m.awayLineup || []).includes(pid)
 ){
 t.matches++;
+st.matches++;
 }
-t.minutes += s.minutes || 0;
-t.goals += s.goals || 0;
-t.assists += s.assists || 0;
-t.yellow += s.yellow || 0;
-t.red += s.red || 0;
-t.shots += s.shots || 0;
-t.xg += s.xg || 0;
-t.passesMade += s.passesMade || 0;
-t.passesTotal += s.passesTotal || 0;
 
-t.plusMinus += s.plusMinus || 0;
-t.penaltyMinutes += s.penaltyMinutes || 0;
-t.faceoffsTotal += s.faceoffsTotal || 0;
-t.faceoffsWon += s.faceoffsWon || 0;
-t.saves += s.saves || 0;
-t.shotsAgainst += s.shotsAgainst || 0;
+// stats
+[
+"minutes","goals","assists","shots","yellow","red","xg",
+"passesMade","passesTotal","plusMinus","penaltyMinutes",
+"faceoffsTotal","faceoffsWon","saves","shotsAgainst"
+].forEach(key=>{
+t[key] += s[key] || 0;
+st[key] += s[key] || 0;
+});
 
 if(s.rating !== undefined){
 t.ratingSum += s.rating;
+st.ratingSum += s.rating;
 }
 
 });
 
 });
 
+// ===== ULOŽENÍ
 let batch = writeBatch(db);
 
 for(const pid of playerIds){
@@ -594,26 +610,39 @@ let ref = doc(db,"players",pid);
 let snap = await getDoc(ref);
 if(!snap.exists()) continue;
 
-let player = snap.data();
 let t = totals[pid];
 
+// TOTAL výpočty
 t.avgRating = t.matches>0 ? t.ratingSum/t.matches : 0;
 t.passSuccess = t.passesTotal>0 ? (t.passesMade/t.passesTotal)*100 : 0;
 t.faceoffPct = t.faceoffsTotal>0 ? (t.faceoffsWon/t.faceoffsTotal)*100 : 0;
 t.savePct = t.shotsAgainst>0 ? (t.saves/t.shotsAgainst)*100 : 0;
 t.shootoutPct = t.shootoutAttempts>0 ? (t.shootoutGoals/t.shootoutAttempts)*100 : 0;
 
-if(!player.stats) player.stats = {};
-player.stats.total = t;
+// SEASON výpočty
+Object.keys(seasonTotals[pid]).forEach(seasonId=>{
+let s = seasonTotals[pid][seasonId];
 
-batch.set(ref, player);
+s.avgRating = s.matches>0 ? s.ratingSum/s.matches : 0;
+s.passSuccess = s.passesTotal>0 ? (s.passesMade/s.passesTotal)*100 : 0;
+s.faceoffPct = s.faceoffsTotal>0 ? (s.faceoffsWon/s.faceoffsTotal)*100 : 0;
+s.savePct = s.shotsAgainst>0 ? (s.saves/s.shotsAgainst)*100 : 0;
+s.shootoutPct = s.shootoutAttempts>0 ? (s.shootoutGoals/s.shootoutAttempts)*100 : 0;
+});
+
+// 🔥 UPDATE (NE set!)
+batch.update(ref, {
+stats: {
+total: t,
+seasons: seasonTotals[pid]
+}
+});
 
 }
 
 await batch.commit();
 
 }
-
 
 
 async function render(){
