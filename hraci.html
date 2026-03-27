@@ -161,7 +161,10 @@ async function loadPlayers(){
         return;
     }
 
-    let selectedSeason = "total";
+    // default = poslední sezona (nejnovější)
+let selectedSeason = seasons.length > 0
+    ? seasons[seasons.length - 1].id
+    : "total";
 
     const seasonSelect = document.createElement("select");
 
@@ -177,12 +180,16 @@ async function loadPlayers(){
     totalOpt.textContent = "Celkově";
     seasonSelect.appendChild(totalOpt);
 
-    seasons.forEach(s=>{
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = s.name;
-        seasonSelect.appendChild(opt);
-    });
+    // options
+seasons.forEach(s=>{
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.name;
+    seasonSelect.appendChild(opt);
+});
+
+// 🔥 až PO vytvoření všech options nastav value
+seasonSelect.value = selectedSeason;
 
     document.querySelector(".container")
     .insertBefore(seasonSelect,
