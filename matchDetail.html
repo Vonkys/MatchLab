@@ -27,11 +27,12 @@ body{
 .card{
     background:#1b1b1b;
     padding:10px 14px;
-    border-radius:10px;
+    border-radius:6px; /* 🔥 menší radius = méně práce */
     margin-top:8px;
     display:flex;
     flex-direction:column;
 }
+
 button{
     width:100%;
     padding:12px;
@@ -59,6 +60,11 @@ input{
     padding:6px;
     border-radius:10px;
     background:#101010;
+
+    /* 🔥 PERFORMANCE FIX */
+    will-change: transform;
+    transform: translateZ(0);
+    contain: content;
 }
 
 input:focus{
@@ -66,9 +72,19 @@ input:focus{
     box-shadow:0 0 0 2px rgba(46,204,113,0.25);
     outline:none;
 }
+
+.activeRow{
+    background:#163a1f;
+    border:1px solid #2ecc71;
+}
+
+.inactiveRow{
+    background:#1b1b1b;
+    border:none;
+}
+
 </style>
 </head>
-
 <body>
 
 <div class="topbar">
@@ -1139,6 +1155,7 @@ alphabetContainer.innerHTML = "";
     
     const container=document.getElementById(containerId);
     container.innerHTML="";
+    container.style.willChange = "transform";
 
     if(!match[lineupKey]) match[lineupKey]=[];
     if(!match.playerStats) match.playerStats={};
@@ -1208,14 +1225,16 @@ Object.keys(grouped).forEach(letter=>{
 
         const row=document.createElement("div");
         row.className="card";
+        row.classList.add("inactiveRow");
         if(p.status==="injured"){
         row.style.opacity="0.6";
         }
 
         if(p.status==="suspended"){
         row.style.opacity="0.6";
-        row.style.border="1px solid #ff9f43";
+        row.classList.add("inactiveRow");
         }
+        
         row.dataset.playerId = p.id;
         row.dataset.position = p.position;
         const top=document.createElement("div");
@@ -1364,9 +1383,6 @@ Object.keys(inputs).forEach(key=>{
 
 let val = match.playerStats[p.id][key];
 
-
-
-
 if(val === undefined) return;
 
 // ===== HOKEJ ČAS =====
@@ -1378,30 +1394,28 @@ let sec = val % 60;
 inputs[key].value = min + ":" + String(sec).padStart(2,"0");
 
 }else{
-
 inputs[key].value = val;
-
 }
 
 });
 
-    // zobraz statistiky pokud už hráč byl vybrán
-    statsDiv.style.display = "flex";
-    row.style.background = "#163a1f";
-    row.style.border = "1px solid #2ecc71";
+// 🔥 FIX
+statsDiv.style.display = "flex";
+row.classList.add("activeRow");
+row.classList.remove("inactiveRow");
 }
    
         function updateStyle(){
-            if(checkbox.checked){
-                row.style.background="#163a1f";
-                row.style.border="1px solid #2ecc71";
-                statsDiv.style.display="flex";
-            }else{
-                row.style.background="#1b1b1b";
-                row.style.border="none";
-                statsDiv.style.display="none";
-            }
-        }
+    if(checkbox.checked){
+        row.classList.add("activeRow");
+        row.classList.remove("inactiveRow");
+        statsDiv.style.display="flex";
+    }else{
+        row.classList.add("inactiveRow");
+        row.classList.remove("activeRow");
+        statsDiv.style.display="none";
+    }
+}
 
         updateStyle();
 
@@ -1459,6 +1473,7 @@ match.shootoutLog = rounds;
 
 const row=document.createElement("div");
 row.className="card";
+row.classList.add("inactiveRow");
 row.style.display="flex";
 row.style.flexDirection="row";
 row.style.gap="10px";
