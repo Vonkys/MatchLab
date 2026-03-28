@@ -340,6 +340,8 @@ async function renderReferees(){
     const sport=data.sports.find(s=>s.id===state.sportId);
     const league=sport.leagues.find(l=>l.id===state.leagueId);
 
+    if(!league.referees) league.referees=[];
+
     const app=document.getElementById("app");
 
     app.innerHTML=`
@@ -362,47 +364,42 @@ async function renderReferees(){
         const name=document.getElementById("refName").value.trim();
         if(!name) return;
 
-        const id = generateId();
+        league.referees.push({
+            id:generateId(),
+            name
+        });
 
-await setDoc(doc(db,"referees",id),{
-   id,
-   name,
-   leagueId: league.id,
-   sportId: state.sportId
-});
+        await saveData(data);
         render();
     };
 
-const list=document.getElementById("list");
+    const list=document.getElementById("list");
 
-const snap = await getDocs(collection(db,"referees"));
+   (league.referees || [])
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(r=>{
 
-const refs = snap.docs
-.map(d=>d.data())
-.filter(r => r.leagueId === league.id)
-.sort((a,b)=>a.name.localeCompare(b.name,"cs"));
+        const div=document.createElement("div");
+        div.className="card";
 
-refs.forEach(r=>{
+        div.innerHTML=`
+            <span>${r.name}</span>
+            <div class="delete">✖</div>
+        `;
 
-    const div=document.createElement("div");
-    div.className="card";
+        div.querySelector(".delete").onclick=async ()=>{
 
-    div.innerHTML=`
-        <span>${r.name}</span>
-        <div class="delete">✖</div>
-    `;
+            if(!confirm("Smazat rozhodčího?")) return;
 
-    div.querySelector(".delete").onclick=async ()=>{
+            league.referees=league.referees.filter(x=>x.id!==r.id);
 
-        if(!checkDeletePassword()) return;
-        if(!confirm("Smazat rozhodčího?")) return;
+            await saveData(data);
+            render();
+        };
 
-        await deleteDoc(doc(db,"referees",r.id));
-        render();
-    };
-
-    list.appendChild(div);
-});
+        list.appendChild(div);
+    });
 }
 
 async function addLeague(){
@@ -721,6 +718,9 @@ app.innerHTML=`
 <option value="suspended">Trest</option>
 </select>
 
+<label>Tým</label>
+<select id="team"></select>
+
 <button id="savePlayerBtn">Uložit</button>
 
 <hr style="margin:20px 0;opacity:0.2">
@@ -746,10 +746,27 @@ document.querySelector(".back").onclick = goBack;
 document.getElementById("position").value = player.position || "ATT";
 document.getElementById("status").value = player.status || "available";
 
+const teamSnap = await getDocs(collection(db,"teams"));
+const teamSelect = document.getElementById("team");
+
+teamSnap.docs
+.map(d=>d.data())
+.filter(t => t.leagueId === state.leagueId)
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
+.forEach(t=>{
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.name;
+    teamSelect.appendChild(opt);
+});
+
+teamSelect.value = player.teamId;
+
 document.getElementById("savePlayerBtn").onclick = async ()=>{
 
 player.position=document.getElementById("position").value;
 player.status=document.getElementById("status").value;
+player.teamId = document.getElementById("team").value;
 
 await setDoc(doc(db,"players",player.id),player);
 
