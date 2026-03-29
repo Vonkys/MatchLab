@@ -336,70 +336,77 @@ async function renderLeagueMenu(){
 
 async function renderReferees(){
 
-    const data=await getData();
-    const sport=data.sports.find(s=>s.id===state.sportId);
-    const league=sport.leagues.find(l=>l.id===state.leagueId);
+const data=await getData();
+const sport=data.sports.find(s=>s.id===state.sportId);
+const league=sport.leagues.find(l=>l.id===state.leagueId);
 
-    if(!league.referees) league.referees=[];
+const app=document.getElementById("app");
 
-    const app=document.getElementById("app");
+app.innerHTML=`
+    <div class="back">← zpět</div>
+    <h2>Rozhodčí – ${league.name}</h2>
 
-    app.innerHTML=`
-        <div class="back">← zpět</div>
-        <h2>Rozhodčí – ${league.name}</h2>
+    <input id="refName" placeholder="Nový rozhodčí">
+    <button id="addRefBtn">Přidat rozhodčího</button>
 
-        <input id="refName" placeholder="Nový rozhodčí">
-        <button id="addRefBtn">Přidat rozhodčího</button>
+    <div id="list"></div>
+`;
 
-        <div id="list"></div>
+document.querySelector(".back").onclick=()=>{
+    state.view="leagueMenu";
+    render();
+};
+
+// 🔥 LOAD Z FIRESTORE
+const snap = await getDocs(collection(db,"referees"));
+
+const refs = snap.docs
+.map(d=>d.data())
+.filter(r => r.leagueId === league.id)
+.sort((a,b)=>a.name.localeCompare(b.name,"cs"));
+
+const list=document.getElementById("list");
+
+refs.forEach(r=>{
+
+    const div=document.createElement("div");
+    div.className="card";
+
+    div.innerHTML=`
+        <span>${r.name}</span>
+        <div class="delete">✖</div>
     `;
 
-    document.querySelector(".back").onclick=()=>{
-        state.view="leagueMenu";
+    div.querySelector(".delete").onclick=async ()=>{
+
+        if(!confirm("Smazat rozhodčího?")) return;
+
+        await deleteDoc(doc(db,"referees",r.id));
+
         render();
     };
 
-    document.getElementById("addRefBtn").onclick=async ()=>{
+    list.appendChild(div);
+});
 
-        const name=document.getElementById("refName").value.trim();
-        if(!name) return;
+// 🔥 ADD
+document.getElementById("addRefBtn").onclick=async ()=>{
 
-        league.referees.push({
-            id:generateId(),
-            name
-        });
+    const name=document.getElementById("refName").value.trim();
+    if(!name) return;
 
-        await saveData(data);
-        render();
-    };
+    const id = generateId();
 
-    const list=document.getElementById("list");
-
-   (league.referees || [])
-.slice()
-.sort((a,b)=>a.name.localeCompare(b.name,"cs"))
-.forEach(r=>{
-
-        const div=document.createElement("div");
-        div.className="card";
-
-        div.innerHTML=`
-            <span>${r.name}</span>
-            <div class="delete">✖</div>
-        `;
-
-        div.querySelector(".delete").onclick=async ()=>{
-
-            if(!confirm("Smazat rozhodčího?")) return;
-
-            league.referees=league.referees.filter(x=>x.id!==r.id);
-
-            await saveData(data);
-            render();
-        };
-
-        list.appendChild(div);
+    await setDoc(doc(db,"referees",id),{
+        id,
+        name,
+        leagueId: league.id,
+        sportId: state.sportId
     });
+
+    render();
+};
+
 }
 
 async function addLeague(){
