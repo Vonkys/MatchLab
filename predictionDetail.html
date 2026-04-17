@@ -678,7 +678,33 @@ where("leagueId","==",match.leagueId)
 )
 );
 
-const leaguePlayers = playersSnap.docs.map(d=>d.data());
+const leaguePlayers = playersSnap.docs.map(d => ({
+    ...d.data(),
+    id: d.id
+}));
+
+console.log("=== FULL PLAYER OBJECT ===");
+
+leaguePlayers
+.filter(p=>p.teamId===match.homeTeam)
+.forEach(p=>{
+    console.log(p.name, p);
+});
+
+console.log("HOME TEAM PLAYERS:");
+leaguePlayers
+.filter(p=>p.teamId===match.homeTeam)
+.forEach(p=>{
+    console.log(p.name, "| availability:", p.availability);
+});
+
+console.log("AWAY TEAM PLAYERS:");
+leaguePlayers
+.filter(p=>p.teamId===match.awayTeam)
+.forEach(p=>{
+    console.log(p.name, "| availability:", p.availability);
+});
+console.log("PLAYER IDs:", playersSnap.docs.map(d=>d.id));
 
 // ===== LINEUP (pokud není vyplněná, vezme poslední zápas)
 
@@ -688,21 +714,26 @@ function getLastLineup(league, season, teamId){
 
 let matches = leagueMatches
 .filter(m =>
-(m.homeTeam === teamId || m.awayTeam === teamId) &&
-m.homeLineup &&
-m.awayLineup
+(m.homeTeam === teamId || m.awayTeam === teamId)
 )
 .sort((a,b)=> new Date(a.date) - new Date(b.date));
 
-const lastMatch = matches[matches.length - 1];
+// 🔥 vezmi poslední VALIDNÍ sestavu
+for(let i = matches.length - 1; i >= 0; i--){
 
-if(!lastMatch) return [];
+const m = matches[i];
 
-if(lastMatch.homeTeam === teamId){
-return lastMatch.homeLineup || [];
+if(m.homeTeam === teamId && m.homeLineup && m.homeLineup.length){
+return m.homeLineup;
 }
 
-return lastMatch.awayLineup || [];
+if(m.awayTeam === teamId && m.awayLineup && m.awayLineup.length){
+return m.awayLineup;
+}
+
+}
+
+return [];
 }
 
 // ===== NAČTENÍ SESTAVY
@@ -710,6 +741,9 @@ return lastMatch.awayLineup || [];
 let homeLineup = match.homeLineup || [];
 let awayLineup = match.awayLineup || [];
 
+
+
+// fallback na poslední zápas
 if(homeLineup.length === 0){
 homeLineup = getLastLineup(league, season, match.homeTeam);
 }
@@ -718,19 +752,64 @@ if(awayLineup.length === 0){
 awayLineup = getLastLineup(league, season, match.awayTeam);
 }
 
+// 🔥 ČIŠTĚNÍ SESTAVY (KLÍČOVÉ)
+function fixLineup(lineup, teamId){
+
+// 1. hráči týmu co můžou hrát
+const availablePlayers = leaguePlayers.filter(p =>
+p.teamId === teamId &&
+(p.status === "available" || !p.status)
+);
+
+// 2. odeber zraněné / tresty
+let fixed = lineup.filter(pid=>{
+const p = leaguePlayers.find(x=>x.id === pid);
+return p && (p.status === "available" || !p.status);
+});
+
+// 3. doplň do 11 hráčů
+const usedIds = new Set(fixed);
+
+availablePlayers.forEach(p=>{
+if(fixed.length >= 11) return;
+
+if(!usedIds.has(p.id)){
+fixed.push(p.id);
+usedIds.add(p.id);
+}
+});
+
+return fixed;
+}
+
+// 🔥 aplikuj
+homeLineup = fixLineup(homeLineup, match.homeTeam);
+awayLineup = fixLineup(awayLineup, match.awayTeam);
+
+console.log("FINAL HOME LINEUP:", homeLineup);
+console.log("FINAL AWAY LINEUP:", awayLineup);
+
 // ===== HRÁČI ZE SESTAVY
 
 const homeLineupPlayers =
 leaguePlayers.filter(p =>
 p.teamId === match.homeTeam &&
-homeLineup.includes(p.id)
+homeLineup.includes(p.id) &&
+(p.status === "available" || !p.status)
 );
 
 const awayLineupPlayers =
 leaguePlayers.filter(p =>
 p.teamId === match.awayTeam &&
-awayLineup.includes(p.id)
+awayLineup.includes(p.id) &&
+(p.status === "available" || !p.status)
 );
+
+const testMatch = homeLineup.map(pid =>
+    leaguePlayers.find(p => p.id === pid)
+);
+
+console.log("MATCHED HOME PLAYERS:", testMatch);
 
 // ===== TEAM EXPECTED XG (ze sezón hráčů v sestavě)
 
@@ -1055,15 +1134,117 @@ awayExpectedGoals *= homeDefForm;
 
 // ===== LINEUP IMPACT
 
-let lineupDiff = homeLineupStrength - awayLineupStrength;
+// ===== LINEUP IMPACT + MISSING PLAYERS
+
+let lineupDiffRaw = homeLineupStrength - awayLineupStrength;
+let lineupDiff = Math.tanh(lineupDiffRaw * 1.5);
+
+const homeMissing = leaguePlayers.filter(p =>
+p.teamId === match.homeTeam &&
+p.status &&
+p.status !== "available"
+);
+
+const awayMissing = leaguePlayers.filter(p =>
+p.teamId === match.awayTeam &&
+p.status &&
+p.status !== "available"
+);
+
+// 🔥 váha chybějících hráčů (můžeš ladit)
+function calcMissingImpact(players){
+
+let impact = 0;
+
+players.forEach(p=>{
+
+const rating = p.stats?.total?.avgRating || 6.5;
+
+let weight = (rating - 6) / 2;
+weight = Math.max(0, Math.min(weight, 1));
+
+impact += 0.015 + (weight * 0.02);
+
+});
+
+// 🔥 LIMIT (game changer)
+return Math.min(impact, 0.12);
+
+}
+
+function getMissingGoalImpact(players){
+
+let totalGoals = 0;
+let totalMatches = 0;
+
+players.forEach(p=>{
+
+const t = p.stats?.total;
+
+if(!t) return;
+
+totalGoals += t.goals || 0;
+totalMatches += t.matches || 0;
+
+});
+
+if(totalMatches === 0) return 0;
+
+return totalGoals / totalMatches;
+}
+
+const missingImpactHome = calcMissingImpact(homeMissing);
+const missingImpactAway = calcMissingImpact(awayMissing);
+const missingGoalsHome = getMissingGoalImpact(homeMissing);
+const missingGoalsAway = getMissingGoalImpact(awayMissing);
+const keyMissingHome = homeMissing.length;
+const keyMissingAway = awayMissing.length;
+
+console.log("HOME XI missing:", homeMissing.map(p=>p.name));
+console.log("AWAY XI missing:", awayMissing.map(p=>p.name));
 
 if(isHockey){
 lineupDiff *= 0.65;
 }
 
-// malý vliv sestavy (bezpečný rozsah)
-homeExpectedGoals *= (1 + lineupDiff * 0.08);
-awayExpectedGoals *= (1 - lineupDiff * 0.08);
+// základní vliv sestavy
+homeExpectedGoals *= (1 + lineupDiff * 0.22);
+awayExpectedGoals *= (1 - lineupDiff * 0.22);
+
+// 🔥 penalizace za absence (GOAL IMPACT)
+
+
+const missingRatingHome = getMissingRatingImpact(homeMissing);
+const missingRatingAway = getMissingRatingImpact(awayMissing);
+
+homeExpectedGoals *= (1 - missingRatingHome * 0.35);
+awayExpectedGoals *= (1 - missingRatingAway * 0.35);
+
+const maxMissingImpact = 0.35;
+
+function getMissingRatingImpact(players){
+
+let impact = 0;
+
+players.forEach(p=>{
+
+const r = p.stats?.total?.avgRating || 6.5;
+
+// normalizace (6 = slabý, 8 = top)
+let weight = (r - 6) / 2;
+
+// clamp
+weight = Math.max(0, Math.min(weight, 1));
+
+impact += weight;
+
+});
+
+// průměr
+if(players.length === 0) return 0;
+
+return impact / players.length;
+}
 
 // ===== ATTACK IMPACT (xG sestavy)
 
