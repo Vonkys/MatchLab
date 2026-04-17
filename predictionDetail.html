@@ -710,6 +710,7 @@ return lastMatch.awayLineup || [];
 let homeLineup = match.homeLineup || [];
 let awayLineup = match.awayLineup || [];
 
+// fallback na poslední zápas
 if(homeLineup.length === 0){
 homeLineup = getLastLineup(league, season, match.homeTeam);
 }
@@ -718,18 +719,55 @@ if(awayLineup.length === 0){
 awayLineup = getLastLineup(league, season, match.awayTeam);
 }
 
+// 🔥 ČIŠTĚNÍ SESTAVY (KLÍČOVÉ)
+function fixLineup(lineup, teamId){
+
+// 1. hráči týmu co můžou hrát
+const availablePlayers = leaguePlayers.filter(p =>
+p.teamId === teamId &&
+(p.availability === "available" || !p.availability)
+);
+
+// 2. odeber zraněné / tresty
+let fixed = lineup.filter(pid=>{
+const p = leaguePlayers.find(x=>x.id === pid);
+return p && (p.availability === "available" || !p.availability);
+});
+
+// 3. doplň do 11 hráčů
+const usedIds = new Set(fixed);
+
+availablePlayers.forEach(p=>{
+if(fixed.length >= 11) return;
+
+if(!usedIds.has(p.id)){
+fixed.push(p.id);
+usedIds.add(p.id);
+}
+});
+
+return fixed;
+}
+
+// 🔥 aplikuj
+homeLineup = fixLineup(homeLineup, match.homeTeam);
+awayLineup = fixLineup(awayLineup, match.awayTeam);
+
+
 // ===== HRÁČI ZE SESTAVY
 
 const homeLineupPlayers =
 leaguePlayers.filter(p =>
 p.teamId === match.homeTeam &&
-homeLineup.includes(p.id)
+homeLineup.includes(p.id) &&
+(p.availability === "available" || !p.availability)
 );
 
 const awayLineupPlayers =
 leaguePlayers.filter(p =>
 p.teamId === match.awayTeam &&
-awayLineup.includes(p.id)
+awayLineup.includes(p.id) &&
+(p.availability === "available" || !p.availability)
 );
 
 // ===== TEAM EXPECTED XG (ze sezón hráčů v sestavě)
@@ -1055,15 +1093,85 @@ awayExpectedGoals *= homeDefForm;
 
 // ===== LINEUP IMPACT
 
-let lineupDiff = homeLineupStrength - awayLineupStrength;
+// ===== LINEUP IMPACT + MISSING PLAYERS
+
+let lineupDiffRaw = homeLineupStrength - awayLineupStrength;
+let lineupDiff = Math.tanh(lineupDiffRaw * 1.5);
+
+const homeMissing = homeLineup
+.map(pid => leaguePlayers.find(p => p.id === pid))
+.filter(p => p && p.availability && p.availability !== "available");
+
+const awayMissing = awayLineup
+.map(pid => leaguePlayers.find(p => p.id === pid))
+.filter(p => p && p.availability && p.availability !== "available");
+
+// 🔥 váha chybějících hráčů (můžeš ladit)
+function calcMissingImpact(players){
+
+let impact = 0;
+
+players.forEach(p=>{
+
+const rating = p.stats?.total?.avgRating || 6.5;
+
+let weight = (rating - 6) / 2;
+weight = Math.max(0, Math.min(weight, 1));
+
+impact += 0.015 + (weight * 0.02);
+
+});
+
+// 🔥 LIMIT (game changer)
+return Math.min(impact, 0.12);
+
+}
+
+function getMissingGoalImpact(players){
+
+let totalGoals = 0;
+let totalMatches = 0;
+
+players.forEach(p=>{
+
+const t = p.stats?.total;
+
+if(!t) return;
+
+totalGoals += t.goals || 0;
+totalMatches += t.matches || 0;
+
+});
+
+if(totalMatches === 0) return 0;
+
+return totalGoals / totalMatches;
+}
+
+const missingImpactHome = calcMissingImpact(homeMissing);
+const missingImpactAway = calcMissingImpact(awayMissing);
+const missingGoalsHome = getMissingGoalImpact(homeMissing);
+const missingGoalsAway = getMissingGoalImpact(awayMissing);
+const keyMissingHome = homeMissing.length;
+const keyMissingAway = awayMissing.length;
+
+console.log("HOME XI missing:", homeMissing.map(p=>p.name));
+console.log("AWAY XI missing:", awayMissing.map(p=>p.name));
 
 if(isHockey){
 lineupDiff *= 0.65;
 }
 
-// malý vliv sestavy (bezpečný rozsah)
-homeExpectedGoals *= (1 + lineupDiff * 0.08);
-awayExpectedGoals *= (1 - lineupDiff * 0.08);
+// základní vliv sestavy
+homeExpectedGoals *= (1 + lineupDiff * 0.22);
+awayExpectedGoals *= (1 - lineupDiff * 0.22);
+
+// 🔥 penalizace za absence (GOAL IMPACT)
+homeExpectedGoals *= (1 - (missingGoalsHome * 1.8));
+awayExpectedGoals *= (1 - (missingGoalsAway * 1.8));
+
+homeExpectedGoals *= (1 - keyMissingHome * 0.06);
+awayExpectedGoals *= (1 - keyMissingAway * 0.06);
 
 // ===== ATTACK IMPACT (xG sestavy)
 
