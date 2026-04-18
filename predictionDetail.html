@@ -131,6 +131,37 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// ===== SAVE PREDICTION (learning)
+async function savePrediction(match, homeWin, draw, awayWin, homeExpectedGoals, awayExpectedGoals){
+
+const id = auth.currentUser.uid + "_" + match.id;
+
+const ref = doc(db, "predictions", id);
+
+// 🔥 načti existující
+const snap = await getDoc(ref);
+const existing = snap.exists() ? snap.data() : null;
+
+await setDoc(ref,{
+matchId: match.id,
+leagueId: match.leagueId,
+userId: auth.currentUser.uid,
+
+homeWin,
+draw,
+awayWin,
+
+expectedHomeGoals: homeExpectedGoals,
+expectedAwayGoals: awayExpectedGoals,
+
+createdAt: existing?.createdAt || new Date(),
+updatedAt: new Date()
+
+},{ merge:true });
+
+console.log("PREDICTION SAVED");
+}
+
 onAuthStateChanged(auth,(user)=>{
 
 if(!user){
@@ -536,7 +567,15 @@ return pts;
 
 async function render(){
 
-    const matchId = getMatchId();
+// ===== LOAD MODEL WEIGHTS
+const wSnap = await getDoc(doc(db,"model","weights"));
+
+if(wSnap.exists()){
+modelWeights = wSnap.data();
+console.log("LOADED WEIGHTS:", modelWeights);
+}
+
+const matchId = getMatchId();
 
 // 🔥 načti league z URL
 const leagueId =
@@ -553,6 +592,7 @@ return;
 }
 
 const match = matchSnap.data();
+match.id = matchSnap.id;
 currentMatch = match;
 
 // 🔥 main jen jako lookup cache
@@ -1109,6 +1149,13 @@ function clamp(x, min, max){
   return Math.max(min, Math.min(max, x));
 }
 
+let modelWeights = {
+form: 0.22,
+h2h: 0.08,
+strength: 0.15,
+elo: 0.22
+};
+
 function getTotalImpact({
   formDiff,
   h2h,
@@ -1117,10 +1164,10 @@ function getTotalImpact({
 }){
 
   const impact =
-    (formDiff * 0.22) +
-    (h2h * 0.08) +
-    (strength * 0.15) +
-    (elo * 0.22);
+  (formDiff * modelWeights.form) +
+  (h2h * modelWeights.h2h) +
+  (strength * modelWeights.strength) +
+  (elo * modelWeights.elo);
 
   return clamp(impact, -0.35, 0.35);
 }
@@ -2013,6 +2060,18 @@ document.getElementById("cardsPrediction").innerHTML = `
 `;
 
 }
+
+
+
+// zavolej
+savePrediction(
+    currentMatch,
+    homeWin,
+    draw,
+    awayWin,
+    homeExpectedGoals,
+    awayExpectedGoals
+);
 }
 
 // ===== TEAM RECENT ATTACK XG FORM
