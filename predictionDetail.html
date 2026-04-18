@@ -860,23 +860,28 @@ getTeamAvgMatchXG(match.awayTeam);
 
 function getFootballLineupStrength(players){
 
-let ratingSum = 0;
-let count = 0;
+let total = 0;
+let weightSum = 0;
 
 players.forEach(p=>{
 
-const r = p.stats?.total?.avgRating;
+const r = p.stats?.total?.avgRating || 6.5;
 
-if(r && r > 0){
-ratingSum += r;
-count++;
-}
+// váha hráče (hvězdy víc)
+let weight = 1 + Math.max(0, (r - 6.5) * 1.2);
+
+// lehkej boost za konzistenci
+const matches = p.stats?.total?.matches || 0;
+if(matches > 10) weight *= 1.05;
+
+total += r * weight;
+weightSum += weight;
 
 });
 
-if(count===0) return 6.6;
+if(weightSum === 0) return 6.6;
 
-return ratingSum / count;
+return total / weightSum;
 }
 
 function getHockeyLineupStrength(players){
@@ -1084,7 +1089,7 @@ const awayElo = awayTeamObj?.elo || 1500;
 
 const eloDiff = (homeElo + 65) - awayElo;
 // malý vliv ELO
-const eloFactor = Math.max(-0.5, Math.min(eloDiff / 400, 0.5));
+const eloFactor = Math.max(-0.6, Math.min(eloDiff / 300, 0.6));
 
 const homeAttack =
 (
@@ -1100,23 +1105,43 @@ awayStats.awayXGPerMatch * 0.45
 ) / leagueGoals;
 const awayDefense = (awayStats.awayGoalsAgainstPerMatch || leagueGoals) / leagueGoals;
 
+function clamp(x, min, max){
+  return Math.max(min, Math.min(max, x));
+}
+
+function getTotalImpact({
+  formDiff,
+  h2h,
+  strength,
+  elo
+}){
+
+  const impact =
+    (formDiff * 0.22) +
+    (h2h * 0.08) +
+    (strength * 0.15) +
+    (elo * 0.22);
+
+  return clamp(impact, -0.35, 0.35);
+}
+
+// základ bez biasu
 let homeExpectedGoals =
-(homeAttack * awayDefense * leagueGoals) *
-(1 +
-(homeForm - awayForm) * 0.2 +
-h2hFactor * 0.15 +
-strengthDiff * 0.18 +
-eloFactor * 0.25
-);
+(homeAttack * awayDefense * leagueGoals);
 
 let awayExpectedGoals =
-(awayAttack * homeDefense * leagueGoals) *
-(1 +
-(awayForm - homeForm) * 0.2 -
-h2hFactor * 0.15 -
-strengthDiff * 0.18 -
-eloFactor * 0.25
-);
+(awayAttack * homeDefense * leagueGoals);
+
+// aplikace kontrolovaného vlivu
+const totalImpact = getTotalImpact({
+  formDiff: homeForm - awayForm,
+  h2h: h2hFactor,
+  strength: strengthDiff,
+  elo: eloFactor
+});
+
+homeExpectedGoals *= (1 + totalImpact);
+awayExpectedGoals *= (1 - totalImpact);
 
 // DYNAMICKÁ DOMÁCÍ VÝHODA LIGY
 const homeAdvantageRaw = 1 + ((leagueAvg.avgGoals * 0.1) - 0.13);
@@ -1208,8 +1233,8 @@ lineupDiff *= 0.65;
 }
 
 // základní vliv sestavy
-homeExpectedGoals *= (1 + lineupDiff * 0.22);
-awayExpectedGoals *= (1 - lineupDiff * 0.22);
+homeExpectedGoals *= (1 + lineupDiff * 0.32);
+awayExpectedGoals *= (1 - lineupDiff * 0.32);
 
 // 🔥 penalizace za absence (GOAL IMPACT)
 
@@ -1217,8 +1242,8 @@ awayExpectedGoals *= (1 - lineupDiff * 0.22);
 const missingRatingHome = getMissingRatingImpact(homeMissing);
 const missingRatingAway = getMissingRatingImpact(awayMissing);
 
-homeExpectedGoals *= (1 - missingRatingHome * 0.35);
-awayExpectedGoals *= (1 - missingRatingAway * 0.35);
+homeExpectedGoals *= (1 - missingRatingHome * 0.18);
+awayExpectedGoals *= (1 - missingRatingAway * 0.18);
 
 const maxMissingImpact = 0.35;
 
@@ -1622,6 +1647,24 @@ homeWin = homeWin / totalProb;
 draw = draw / totalProb;
 awayWin = awayWin / totalProb;
 
+function calibrate(p){
+
+// lehké zploštění extrémů
+return 0.5 + (p - 0.5) * 0.85;
+
+}
+
+homeWin = calibrate(homeWin);
+awayWin = calibrate(awayWin);
+
+// remízu nech bez kalibrace
+
+// znovu normalizace
+const sum = homeWin + draw + awayWin;
+homeWin /= sum;
+draw /= sum;
+awayWin /= sum;
+
 // ===== MODEL CONFIDENCE =====
 const bestIndex = [homeWin, draw, awayWin].indexOf(Math.max(homeWin, draw, awayWin));
 const probs = [homeWin, draw, awayWin].sort((a,b)=>b-a);
@@ -1856,12 +1899,12 @@ if(!odds) return "";
 let valueText = "";
 let border = "#333";
 
-if(value > 0.05 && prob === Math.max(homeProb, drawProb, awayProb)){
+if(value > 0.07 && confidence > 12){
 valueText = "<div style='color:#2ecc71;font-size:12px;margin-top:4px;'>🔥 VALUE</div>";
 border = "#2ecc71";
 }
 
-let click = value > 0.05 && prob === Math.max(homeProb, drawProb, awayProb)
+let click = value > 0.07 && confidence > 12
 ? `onclick="openBetPopup('${label}', ${odds}, '${label === "Remíza" ? "X" : (label === home.name ? "1" : "2")}')"`
 : "";
 
