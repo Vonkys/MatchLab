@@ -114,7 +114,7 @@ z-index:1000;
 /* ================= FIREBASE ================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -177,6 +177,51 @@ async function getData(){
     await setDoc(ref,empty);
     APP_DATA = empty;
     return APP_DATA;
+}
+
+async function createPrediction(matchId, leagueId, homeTeamId, awayTeamId){
+
+const homeSnap = await getDoc(doc(db,"teams",homeTeamId));
+const awaySnap = await getDoc(doc(db,"teams",awayTeamId));
+
+if(!homeSnap.exists() || !awaySnap.exists()) return;
+
+const home = homeSnap.data();
+const away = awaySnap.data();
+
+const homeElo = home.elo || 1500;
+const awayElo = away.elo || 1500;
+
+const expectedHome = 1 / (1 + Math.pow(10,(awayElo-homeElo)/400));
+const expectedAway = 1 - expectedHome;
+
+const draw = 0.25;
+
+const sum = expectedHome + expectedAway + draw;
+
+const prediction = {
+matchId,
+leagueId,
+
+homeWin: expectedHome / sum,
+draw: draw / sum,
+awayWin: expectedAway / sum,
+
+expectedHomeGoals: 1.5 + (homeElo - 1500)/1000,
+expectedAwayGoals: 1.2 + (awayElo - 1500)/1000,
+
+status: "pending",
+createdAt: serverTimestamp(),
+updatedAt: serverTimestamp()
+};
+
+const predId = "pred_" + matchId;
+
+await setDoc(
+doc(db,"predictions", predId),
+prediction
+);
+
 }
 
 async function saveData(data){
@@ -577,8 +622,10 @@ awayScore:null,
 overtime:false,
 shootout:false,
 status:"scheduled"
-
 });
+
+// 🔥 vytvoření predikce
+await createPrediction(matchId, leagueId, home, away);
 
 MATCHES_CACHE = null;
 
@@ -812,7 +859,8 @@ ${homeName} ${match.homeScore ?? "-"}:${match.awayScore ?? "-"}${resultText}${ha
                 if(!confirm("Smazat zápas?")) return;
 
                 await deleteDoc(doc(db,"matches",league.id,"list",match.id));
-
+                await deleteDoc(doc(db,"predictions", "pred_" + match.id));
+                
                 MATCHES_CACHE = null;
                 render();
             };
@@ -921,6 +969,7 @@ for(const m of matches){
 
 if(Number(m.roundNumber) === Number(roundNumber)){
 await deleteDoc(doc(db,"matches",leagueId,"list",m.id));
+await deleteDoc(doc(db,"predictions", "pred_" + m.id));
 }
 }
 
@@ -957,6 +1006,7 @@ const matches = await getMatches(leagueId);
 for(const m of matches){
 if(m.season === seasonId){
 await deleteDoc(doc(db,"matches",leagueId,"list",m.id));
+await deleteDoc(doc(db,"predictions", "pred_" + m.id));
 }
 }
 
