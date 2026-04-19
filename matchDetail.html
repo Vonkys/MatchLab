@@ -660,6 +660,125 @@ await batch.commit();
 
 }
 
+async function finalizePredictions(match){
+
+if(match.homeScore === null || match.awayScore === null){
+    return;
+}
+
+    const q = query(
+collection(db,"predictions"),
+where("matchId","==", match.id)
+);
+
+const snap = await getDocs(q);
+
+for (const docSnap of snap.docs){
+
+await setDoc(doc(db,"predictions", docSnap.id),{
+
+status: "finished",
+realHomeGoals: match.homeScore,
+realAwayGoals: match.awayScore,
+
+realResult:
+match.homeScore > match.awayScore ? "1" :
+match.homeScore < match.awayScore ? "2" : "X"
+
+},{ merge:true });
+
+}
+
+console.log("✅ predictions updated");
+
+}
+
+async function updateModelWeights(){
+
+const snap = await getDocs(
+query(
+collection(db,"predictions"),
+where("status","==","finished")
+)
+);
+
+let data = [];
+
+snap.forEach(doc=>{
+const d = doc.data();
+
+if(
+d.status === "finished" &&
+d.realHomeGoals != null &&
+d.homeWin != null
+){
+data.push(d);
+}
+});
+
+if(data.length < 15){
+console.log("málo dat na učení");
+return;
+}
+
+// ===== ERROR CALC =====
+
+let errorHome = 0;
+let errorDraw = 0;
+let errorAway = 0;
+
+function safe(p){
+return Math.max(0.01, Math.min(p, 0.99));
+}
+
+data.forEach(d=>{
+
+const real =
+d.realHomeGoals > d.realAwayGoals ? [1,0,0] :
+d.realHomeGoals < d.realAwayGoals ? [0,0,1] :
+[0,1,0];
+
+errorHome += -Math.log(real[0] ? safe(d.homeWin) : safe(1 - d.homeWin));
+errorDraw += -Math.log(real[1] ? safe(d.draw) : safe(1 - d.draw));
+errorAway += -Math.log(real[2] ? safe(d.awayWin) : safe(1 - d.awayWin));
+
+});
+
+errorHome /= data.length;
+errorDraw /= data.length;
+errorAway /= data.length;
+
+// ===== UPDATE WEIGHTS
+
+let weightsSnap = await getDoc(doc(db,"model","weights"));
+let weights = weightsSnap.exists() ? weightsSnap.data() : {
+form:0.22,
+h2h:0.08,
+strength:0.15,
+elo:0.22
+};
+
+const lr = 0.05;
+
+weights.form += (0.33 - errorHome) * lr;
+weights.h2h += (0.33 - errorDraw) * lr;
+weights.elo += (0.33 - errorAway) * lr;
+weights.strength += (0.33 - (errorHome + errorAway)/2) * lr;
+
+// normalizace
+const sum = weights.form + weights.h2h + weights.strength + weights.elo;
+
+weights.form /= sum;
+weights.h2h /= sum;
+weights.strength /= sum;
+weights.elo /= sum;
+
+await setDoc(doc(db,"model","weights"),weights);
+
+console.log("🔥 MODEL UPDATED", weights);
+
+}
+
 
 async function render(){
 
@@ -1138,6 +1257,11 @@ const affectedPlayers = [
 ];
 
 await recomputeStatsForPlayers(affectedPlayers, league.id);
+
+if(match.status === "played"){
+    await finalizePredictions(match);
+    await updateModelWeights(); // 🔥 SEM to patří
+}
 
 document.getElementById("savingOverlay").style.display = "none";
 
