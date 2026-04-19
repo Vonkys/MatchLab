@@ -210,12 +210,12 @@ awayWin: expectedAway / sum,
 expectedHomeGoals: 1.5 + (homeElo - 1500)/1000,
 expectedAwayGoals: 1.2 + (awayElo - 1500)/1000,
 
-status: "pending",
+status: "scheduled",
 createdAt: serverTimestamp(),
 updatedAt: serverTimestamp()
 };
 
-const predId = "pred_" + matchId;
+const predId = matchId;
 
 await setDoc(
 doc(db,"predictions", predId),
@@ -858,7 +858,7 @@ ${homeName} ${match.homeScore ?? "-"}:${match.awayScore ?? "-"}${resultText}${ha
                 if(!confirm("Smazat zápas?")) return;
 
                 await deleteDoc(doc(db,"matches",league.id,"list",match.id));
-                await deleteDoc(doc(db,"predictions", "pred_" + match.id));
+                await deleteDoc(doc(db,"predictions", match.id));
                 
                 MATCHES_CACHE = null;
                 render();
@@ -968,7 +968,7 @@ for(const m of matches){
 
 if(Number(m.roundNumber) === Number(roundNumber)){
 await deleteDoc(doc(db,"matches",leagueId,"list",m.id));
-await deleteDoc(doc(db,"predictions", "pred_" + m.id));
+await deleteDoc(doc(db,"predictions", m.id));
 }
 }
 
@@ -1005,7 +1005,7 @@ const matches = await getMatches(leagueId);
 for(const m of matches){
 if(m.season === seasonId){
 await deleteDoc(doc(db,"matches",leagueId,"list",m.id));
-await deleteDoc(doc(db,"predictions", "pred_" + m.id));
+await deleteDoc(doc(db,"predictions", m.id));
 }
 }
 
