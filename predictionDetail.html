@@ -147,6 +147,11 @@ matchId: match.id,
 leagueId: match.leagueId,
 userId: auth.currentUser.uid,
 
+status: match.status || "scheduled",
+
+realHomeGoals: match.homeScore ?? null,
+realAwayGoals: match.awayScore ?? null,
+
 homeWin,
 draw,
 awayWin,
@@ -160,6 +165,93 @@ updatedAt: new Date()
 },{ merge:true });
 
 console.log("PREDICTION SAVED");
+}
+
+async function updateModelWeights(){
+
+const snap = await getDocs(
+query(
+collection(db,"predictions"),
+where("status","==","played")
+)
+);
+
+let data = [];
+
+snap.forEach(doc=>{
+const d = doc.data();
+
+if(
+d.status === "played" &&
+d.realHomeGoals != null &&
+d.homeWin != null
+){
+data.push(d);
+}
+});
+
+if(data.length < 15){
+console.log("málo dat na učení");
+return;
+}
+
+// ===== ERROR CALC =====
+
+let errorHome = 0;
+let errorDraw = 0;
+let errorAway = 0;
+
+function safe(p){
+return Math.max(0.01, Math.min(p, 0.99));
+}
+
+data.forEach(d=>{
+
+const real =
+d.realHomeGoals > d.realAwayGoals ? [1,0,0] :
+d.realHomeGoals < d.realAwayGoals ? [0,0,1] :
+[0,1,0];
+
+errorHome += -Math.log(real[0] ? safe(d.homeWin) : safe(1 - d.homeWin));
+errorDraw += -Math.log(real[1] ? safe(d.draw) : safe(1 - d.draw));
+errorAway += -Math.log(real[2] ? safe(d.awayWin) : safe(1 - d.awayWin));
+
+});
+
+errorHome /= data.length;
+errorDraw /= data.length;
+errorAway /= data.length;
+
+// ===== UPDATE WEIGHTS
+
+let weightsSnap = await getDoc(doc(db,"model","weights"));
+let weights = weightsSnap.exists() ? weightsSnap.data() : {
+form:0.22,
+h2h:0.08,
+strength:0.15,
+elo:0.22
+};
+
+// jednoduchý learning
+const lr = 0.05;
+
+weights.form += (0.33 - errorHome) * lr;
+weights.h2h += (0.33 - errorDraw) * lr;
+weights.elo += (0.33 - errorAway) * lr;
+weights.strength += (0.33 - (errorHome + errorAway)/2) * lr;
+
+// normalizace
+const sum = weights.form + weights.h2h + weights.strength + weights.elo;
+
+weights.form /= sum;
+weights.h2h /= sum;
+weights.strength /= sum;
+weights.elo /= sum;
+
+await setDoc(doc(db,"model","weights"),weights);
+
+console.log("MODEL UPDATED", weights);
+
 }
 
 onAuthStateChanged(auth,(user)=>{
@@ -1285,15 +1377,6 @@ awayExpectedGoals *= (1 - lineupDiff * 0.32);
 
 // 🔥 penalizace za absence (GOAL IMPACT)
 
-
-const missingRatingHome = getMissingRatingImpact(homeMissing);
-const missingRatingAway = getMissingRatingImpact(awayMissing);
-
-homeExpectedGoals *= (1 - missingRatingHome * 0.18);
-awayExpectedGoals *= (1 - missingRatingAway * 0.18);
-
-const maxMissingImpact = 0.35;
-
 function getMissingRatingImpact(players){
 
 let impact = 0;
@@ -1317,6 +1400,19 @@ if(players.length === 0) return 0;
 
 return impact / players.length;
 }
+
+const missingRatingHome = getMissingRatingImpact(homeMissing);
+const missingRatingAway = getMissingRatingImpact(awayMissing);
+
+homeExpectedGoals *= (1 - missingRatingHome * 0.18);
+awayExpectedGoals *= (1 - missingRatingAway * 0.18);
+homeExpectedGoals *= (1 - missingGoalsHome * 0.18);
+awayExpectedGoals *= (1 - missingGoalsAway * 0.18);
+
+
+const maxMissingImpact = 0.35;
+
+
 
 // ===== ATTACK IMPACT (xG sestavy)
 
@@ -2071,7 +2167,17 @@ savePrediction(
     awayWin,
     homeExpectedGoals,
     awayExpectedGoals
-);
+    );
+
+if(currentMatch.status === "played" && !currentMatch.modelUpdated){
+    await updateModelWeights();
+
+    await setDoc(
+        doc(db,"matches",currentMatch.leagueId,"list",currentMatch.id),
+        { modelUpdated: true },
+        { merge:true }
+    );
+}
 }
 
 // ===== TEAM RECENT ATTACK XG FORM
