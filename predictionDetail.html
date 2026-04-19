@@ -135,11 +135,13 @@ const auth = getAuth(app);
 async function savePrediction(match, homeWin, draw, awayWin, homeExpectedGoals, awayExpectedGoals){
 
 const id = match.id;
-
 const ref = doc(db, "predictions", id);
 
-// 🔥 načti existující
+// 🔥 nejdřív vytvoř ref, pak načti
 const snap = await getDoc(ref);
+
+
+
 const existing = snap.exists() ? snap.data() : null;
 
 await setDoc(ref,{
