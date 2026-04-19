@@ -134,7 +134,7 @@ const auth = getAuth(app);
 // ===== SAVE PREDICTION (learning)
 async function savePrediction(match, homeWin, draw, awayWin, homeExpectedGoals, awayExpectedGoals){
 
-const id = auth.currentUser.uid + "_" + match.id;
+const id = match.id;
 
 const ref = doc(db, "predictions", id);
 
