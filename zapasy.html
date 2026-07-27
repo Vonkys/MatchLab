@@ -433,6 +433,7 @@ let roundSet = new Set();
 matches.forEach(m=>{
     if(
         m.leagueId === leagueId &&
+        m.season === seasonId &&
         Number(m.roundNumber)
     ){
         roundSet.add(Number(m.roundNumber));
@@ -468,6 +469,7 @@ matches.forEach(m=>{
 
 const found = matches.find(m =>
     m.leagueId === leagueId &&
+    m.season === seasonId &&
     Number(m.roundNumber) === Number(roundSelect.value)
 );
 
