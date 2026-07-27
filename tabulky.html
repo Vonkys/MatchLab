@@ -303,9 +303,20 @@ async function renderSeasonTable(){
     // 🔥 načti týmy z nové struktury
     const teamSnap = await getDocs(collection(db,"teams"));
 
-    const leagueTeams = teamSnap.docs
-    .map(d=>d.data())
-    .filter(t => t.leagueId === leagueId);
+    // týmy které v této sezóně opravdu hrály
+const teamIdsInSeason = new Set();
+
+playedMatches.forEach(m=>{
+    teamIdsInSeason.add(m.homeTeam);
+    teamIdsInSeason.add(m.awayTeam);
+});
+
+const leagueTeams = teamSnap.docs
+.map(d=>d.data())
+.filter(t =>
+    t.leagueId === leagueId &&
+    teamIdsInSeason.has(t.id)
+);
 
     leagueTeams.forEach(team=>{
         let stats = {
