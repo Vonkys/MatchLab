@@ -607,21 +607,30 @@ const list=document.getElementById("list");
             let statusIcon = "";
 
             if(p.status === "injured"){
-                statusIcon = `<span style="color:#ff4d4d;margin-left:6px;">✚</span>`;
-                div.style.opacity = "0.6";
-            }
-            else if(p.status === "suspended"){
-                statusIcon = `<span style="color:#ff9f43;margin-left:6px;">⛔</span>`;
-                div.style.opacity = "0.6";
-            }
+    statusIcon = `<span style="color:#ff4d4d;margin-left:6px;">✚</span>`;
+    div.style.opacity = "0.6";
+}
+else if(p.status === "suspended"){
+    statusIcon = `<span style="color:#ff9f43;margin-left:6px;">⛔</span>`;
+    div.style.opacity = "0.6";
+}
+else if(p.status === "transferred"){
+    statusIcon = `<span style="color:#74b9ff;margin-left:6px;">🔄</span>`;
+    div.style.opacity = "0.6";
+}
 
-            div.innerHTML=`
-                <span>
-                    ${p.name}
-                    ${statusIcon}
-                </span>
-                <div class="delete">✖</div>
-            `;
+            const playerName =
+p.status === "transferred"
+? `<s>${p.name}</s>`
+: p.name;
+
+div.innerHTML=`
+    <span>
+        ${playerName}
+        ${statusIcon}
+    </span>
+    <div class="delete">✖</div>
+`;
 
             div.querySelector("span").onclick=()=>{
                 state.view="playerDetail";
@@ -723,6 +732,7 @@ app.innerHTML=`
 <option value="available">Dostupný</option>
 <option value="injured">Zraněný</option>
 <option value="suspended">Trest</option>
+<option value="transferred">Přestoupil mimo ligu</option>
 </select>
 
 <label>Tým</label>
