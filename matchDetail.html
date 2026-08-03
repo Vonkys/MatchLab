@@ -1373,13 +1373,18 @@ Object.keys(grouped).forEach(letter=>{
         row.className="card";
         row.classList.add("inactiveRow");
         if(p.status==="injured"){
-        row.style.opacity="0.6";
-        }
+    row.style.opacity="0.6";
+}
 
-        if(p.status==="suspended"){
-        row.style.opacity="0.6";
-        row.classList.add("inactiveRow");
-        }
+if(p.status==="suspended"){
+    row.style.opacity="0.6";
+    row.classList.add("inactiveRow");
+}
+
+if(p.status==="transferred"){
+    row.style.opacity="0.6";
+    row.classList.add("inactiveRow");
+}
         
         row.dataset.playerId = p.id;
         row.dataset.position = p.position;
@@ -1389,11 +1394,20 @@ Object.keys(grouped).forEach(letter=>{
         top.style.gap="10px";
 
         const checkbox=document.createElement("input");
-        checkbox.type="checkbox";
-        checkbox.checked = (match[lineupKey] || []).includes(p.id);
+checkbox.type="checkbox";
+checkbox.checked = (match[lineupKey] || []).includes(p.id);
+
+if(p.status==="transferred"){
+    checkbox.disabled = true;
+}
 
         const name=document.createElement("div");
-        name.innerText=p.name;
+
+if(p.status==="transferred"){
+    name.innerHTML = "<s>"+p.name+"</s> 🔄";
+}else{
+    name.innerText = p.name;
+}
 
         top.appendChild(checkbox);
         top.appendChild(name);
