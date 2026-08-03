@@ -561,7 +561,29 @@ if(!s) return;
 
 // init sezóny
 if(!seasonTotals[pid][seasonId]){
-seasonTotals[pid][seasonId] = JSON.parse(JSON.stringify(totals[pid]));
+
+seasonTotals[pid][seasonId] = {
+matches:0,
+minutes:0,
+goals:0,
+assists:0,
+shots:0,
+yellow:0,
+red:0,
+xg:0,
+passesMade:0,
+passesTotal:0,
+ratingSum:0,
+plusMinus:0,
+penaltyMinutes:0,
+faceoffsTotal:0,
+faceoffsWon:0,
+saves:0,
+shotsAgainst:0,
+shootoutAttempts:0,
+shootoutGoals:0,
+};
+
 }
 
 let t = totals[pid];
