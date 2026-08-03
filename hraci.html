@@ -163,7 +163,7 @@ async function loadPlayers(){
 
     // default = poslední sezona (nejnovější)
 let selectedSeason = seasons.length > 0
-    ? seasons[seasons.length - 1].id
+    ? seasons[0].id
     : "total";
 
     const seasonSelect = document.createElement("select");
