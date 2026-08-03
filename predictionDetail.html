@@ -1307,14 +1307,12 @@ let lineupDiff = Math.tanh(lineupDiffRaw * 1.5);
 
 const homeMissing = leaguePlayers.filter(p =>
 p.teamId === match.homeTeam &&
-p.status &&
-p.status !== "available"
+(p.status === "injured" || p.status === "suspended")
 );
 
 const awayMissing = leaguePlayers.filter(p =>
 p.teamId === match.awayTeam &&
-p.status &&
-p.status !== "available"
+(p.status === "injured" || p.status === "suspended")
 );
 
 // 🔥 váha chybějících hráčů (můžeš ladit)
