@@ -127,6 +127,13 @@ let currentMatch = null;
 let currentLeague = null;
 let leagueMatches = [];
 
+let modelWeights = {
+form: 0.22,
+h2h: 0.08,
+strength: 0.15,
+elo: 0.22
+};
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -1243,12 +1250,7 @@ function clamp(x, min, max){
   return Math.max(min, Math.min(max, x));
 }
 
-let modelWeights = {
-form: 0.22,
-h2h: 0.08,
-strength: 0.15,
-elo: 0.22
-};
+
 
 function getTotalImpact({
   formDiff,
